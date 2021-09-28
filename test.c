@@ -6,8 +6,9 @@
 
 int main(){
 	int nr = 5;
-	struct prinfo *t = (struct prinfo *)malloc(sizeof(struct prinfo)*nr);
-	int total = syscall(398, t, &nr);
-	printf("Test succeed: %d\n", total);
+	struct prinfo *buf = (struct prinfo *)malloc(sizeof(struct prinfo) * nr);
+	int num_process = syscall(398, t, &nr);
+	printf("Total number of process: %d\n", num_process);
+	free(buf);
 }
 

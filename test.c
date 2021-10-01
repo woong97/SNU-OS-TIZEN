@@ -6,7 +6,7 @@
 #include <errno.h>
 
 #define PTREE_SYS_CALL_NUM	398
-#define DEFAULT_NR		100
+#define DEFAULT_NR		150
 
 void prinfo_print(struct prinfo *buf, int nr); // pre-order printing of ptree
 

@@ -44,7 +44,6 @@ int main(int argc, char* argv[]){
 
 void prinfo_print(struct prinfo *buf, int nr) {
 	// pid_list and level_tracker for indentation
-	pid_t *pid_list = (pid_t *)malloc(sizeof(pid_t)*nr);
 	int *level_list = (int *)malloc(sizeof(int)*nr);
 	int current_level = 0;
 
@@ -53,7 +52,6 @@ void prinfo_print(struct prinfo *buf, int nr) {
 	int prev = -1;
 	printf("%s,%d,%lld,%d,%d,%d,%lld\n", p.comm, p.pid, p.state, p.parent_pid,
 		p.first_child_pid, p.next_sibling_pid, p.uid);
-	pid_list[i] = p.pid;
 	level_list[i] = current_level;
 	for(i = 1; i < nr; i++) {
 		p = buf[i];
@@ -71,5 +69,6 @@ void prinfo_print(struct prinfo *buf, int nr) {
 		for(j = 0; j < current_level; j++) printf("  ");
 		printf("%s,%d,%lld,%d,%d,%d,%lld\n", p.comm, p.pid, p.state,
 			p.parent_pid, p.first_child_pid, p.next_sibling_pid, p.uid);
+		level_list[i] = current_level;
 	}
 }

@@ -20,29 +20,25 @@ struct prinfo {
 };
 */
 
-struct tasklist
-{
-	struct task_struct *task;
-	struct list_head list;
-};
+extern struct task_struct init_task;
 
-static LIST_HEAD(tasklist_head);		// making new list starting with tasklist_head?
-
-void init_tasklist(void){
-	struct tasklist *root;
-	root = (struct tasklist *)kmalloc(sizeof(struct tasklist), GFP_KERNEL);
-	// init_task : swapper
-	root->task = &init_task;
-	INIT_LIST_HEAD(&(root->list));				// added parentheses
-	list_add(&(root->list), &tasklist_head);	// same as above
+void tasklist_traversal(struct prinfo *buf, int *nr) {
+	int i = 0;
+	struct task_struct *task_p = &init_task;
+	struct prinfo *prinfo_p = buf;
+	for(i = 0; i < *nr; i++) {
+		printk("%d %s\n", task_p->pid, task_p->comm);
+		prinfo_p->state = task_p->state;
+		prinfo_p->pid = task_p->pid;
+		prinfo_p->parent_pid = task_p->real_parent->pid;
+		prinfo_p->first_child_pid = list_entry((&task_p->children)->next, struct task_struct, children)->pid;
+		prinfo_p->next_sibling_pid = list_entry((&task_p->sibling)->next, struct task_struct, sibling)->pid;
+		prinfo_p->uid;	//
+		strncpy(prinfo_p->comm, task_p->comm, 16);
+		prinfo_p++;
+		task_p = list_entry((&task_p->children)->next, struct task_struct, children);
+	}
 }
-
-void preorderSearch(struct prinfo *buf, int *process_count){
-	// Test print: I'll erase under two lines 
-	struct tasklist *swapper = list_entry(tasklist_head.next, struct tasklist, list);
-	printk("pid is %d, comm: %s\n", swapper->task->pid, swapper->task->comm);
-}
-
 
 asmlinkage int sys_ptree(struct prinfo *buf, int *nr){
 	int tmp_nr;
@@ -71,8 +67,7 @@ asmlinkage int sys_ptree(struct prinfo *buf, int *nr){
 		return ENOMEM;
 
 	read_lock(&tasklist_lock);
-	init_tasklist();
-	preorderSearch(kernel_buf, &process_count);
+	tasklist_traversal(kernel_buf, nr);
 	read_unlock(&tasklist_lock);
 	
 	if ((copy_failed_byte = copy_to_user(buf, kernel_buf, sizeof(struct prinfo) * tmp_nr)) != 0) {

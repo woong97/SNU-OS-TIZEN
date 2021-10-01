@@ -37,7 +37,7 @@ int main(int argc, char* argv[]){
 	};
 
 	printf("Total number of process: %d\n", num_process);
-	// prinfo_print(buf, nr);
+	prinfo_print(buf, nr);
 	free(buf);
 	return 0;
 }

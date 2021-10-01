@@ -7,6 +7,7 @@
 #include <linux/sched.h>
 #include <linux/sched/task.h>
 #include <linux/types.h>
+#include <linux/cred.h>
 /*
 struct prinfo {
     int64_t state;          // current state of process
@@ -22,31 +23,27 @@ struct prinfo {
 extern struct task_struct init_task;
 
 void preorderSearch(struct task_struct *sub_root, struct prinfo *buf, int *process_count){
-	//int i = 0;
 	struct task_struct *first_children;
 	struct task_struct *next_sibling;
-	printk("root dir pid is %d, comm: %s\n", sub_root->pid ,sub_root->comm);
 
 	first_children = list_entry((&(sub_root->children))->next, struct task_struct, sibling);
 	next_sibling = list_entry((&(sub_root->sibling))->next, struct task_struct, sibling);
-	printk("pid is %d, comm: %s\n", first_children->pid ,first_children->comm);
-	printk("pid is %d, comm: %s\n", next_sibling->pid, next_sibling->comm);
-/*
-	&buf[process_count]->state = sub_root->state;
-	&buf[process_count]->pid = sub_root->pid;
-	&buf[process_count]->parent_pid = sub_root->parent->pid;
-	&buf[process_count]->first_child_pid = first_children->pid;
-	&buf[process_count]->next_sibling_pid = next_sibling->pid;
-	&buf[process_count]->uid = sub_root->cred->uid
-	strcpy(&buf[process_count]->comm, sub_root->comm);
+
+	(&buf[*process_count])->state = sub_root->state;
+	(&buf[*process_count])->pid = sub_root->pid;
+	(&buf[*process_count])->parent_pid = sub_root->parent->pid;
+	(&buf[*process_count])->first_child_pid = first_children->pid;
+	(&buf[*process_count])->next_sibling_pid = next_sibling->pid;
+	(&buf[*process_count])->uid = (sub_root->cred->uid).val;
+	strcpy((&buf[*process_count])->comm, sub_root->comm);
 	*process_count += 1;
-*/
-	if (first_children->pid < sub_root->pid) {
-		printk("null occured at %s\n", sub_root->comm);
-		return;
-	} else {
+	if (first_children->pid > sub_root->pid) {
 		preorderSearch(first_children, buf, process_count);
 	}
+	if (next_sibling->pid > sub_root->pid){
+		preorderSearch(next_sibling, buf, process_count);
+	}
+
 }
 
 asmlinkage int sys_ptree(struct prinfo *buf, int *nr){

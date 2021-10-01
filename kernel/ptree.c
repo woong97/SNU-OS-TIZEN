@@ -7,6 +7,7 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/sched/task.h>
+#include <linux/types.h>
 /*
 struct prinfo {
     int64_t state;          // current state of process
@@ -25,15 +26,15 @@ struct tasklist
 	struct list_head list;
 };
 
-static LIST_HEAD(tasklist_head);
+static LIST_HEAD(tasklist_head);		// making new list starting with tasklist_head?
 
 void init_tasklist(void){
 	struct tasklist *root;
 	root = (struct tasklist *)kmalloc(sizeof(struct tasklist), GFP_KERNEL);
 	// init_task : swapper
 	root->task = &init_task;
-	INIT_LIST_HEAD(&root->list);
-	list_add(&root->list, &tasklist_head);
+	INIT_LIST_HEAD(&(root->list));				// added parentheses
+	list_add(&(root->list), &tasklist_head);	// same as above
 }
 
 void preorderSearch(struct prinfo *buf, int *process_count){

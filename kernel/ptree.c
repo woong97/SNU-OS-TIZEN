@@ -61,7 +61,6 @@ void preorderSearch(struct task_struct *sub_root, struct prinfo *buf, int *proce
  */
 asmlinkage int sys_ptree(struct prinfo *buf, int *nr){
 	int max_process_count;			// this will hold the value copied from nr
-	struct prinfo tmp_prinfo;		// 
 	int copy_failed_byte;
 	int process_count = 0;			// variable to keep tracking # of processes copied
 	struct prinfo * kernel_buf;		// this will be copied to buf using copy_to_user
@@ -71,15 +70,17 @@ asmlinkage int sys_ptree(struct prinfo *buf, int *nr){
 
 	if (copy_from_user(&max_process_count, nr, sizeof(max_process_count)))	// max_process_count = *nr
 		return -EFAULT;
-	if (copy_from_user(&tmp_prinfo, buf, sizeof(tmp_prinfo)))
-		return -EFAULT;
 	if (max_process_count < 1) {
 		return -EINVAL;
 	}
-
+	if(!access_ok(VERIFY_WRITE, buf, sizeof(struct prinfo) * max_process_count)){
+	        return -EFAULT;
+	}
+	
 	kernel_buf = (struct prinfo *)kmalloc(sizeof(struct prinfo) * max_process_count, GFP_KERNEL);
-	if (kernel_buf == NULL)
-		return ENOMEM;
+	if (kernel_buf == NULL) {
+		return -ENOMEM;
+	}
 	memset(kernel_buf, 0, sizeof(struct prinfo) * max_process_count);
 
 	read_lock(&tasklist_lock);

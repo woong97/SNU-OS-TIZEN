@@ -16,8 +16,8 @@ struct task_struct {
 }
 ```
 저희 조의 구현에서 활용한 필드만 나열한 `task_struct`의 구조입니다.  
-이 중 `state`와 `pid`, `comm`은 그대로 `prinfo`의 `field`로 복사됩니다.  
-`struct cred`는 `uid`를 `field`를 가지고 있으므로 `cred->uid`를 `prinfo`로 복사해줍니다.  
+이 중 `state`와 `pid`, `comm`은 그대로 `prinfo`의 field로 복사됩니다.  
+`struct cred`는 `uid`를 field로 가지고 있으므로 `cred->uid`를 `prinfo`의 `uid` 로 복사해줍니다.  
 `parent`의 경우도 간단하게 `parent->pid`를 복사해주면 됩니다.  
 남는 것은 `struct list_head` 타입의 두 필드입니다. 이에 대해서는 다음 절에서 설명하겠습니다.
 ### 1.2. `list_head`와 tasklist의 구조
@@ -102,12 +102,12 @@ $ sudo ./build-rpi3-arm64.sh && sudo ./scripts/mkbootimg_rpi3.sh
 $ mv *.img ../tiaen-image/
 
 # test.c 파일을 compile합니다
-$ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/test_ptree.c -o ./test/test
+$ arm-linux-gnueabi-gcc -I/include test.c -o test
 
 # tizen-image/rootfs.img를 mount할 directory를 생성한 뒤 mount 해줍니다.
 # test 실행파일을 mount directory root 안으로 옮겨줍니다
 $ sudo mount -v -o loop ${tizen-image directory}/rootfs.img ${mnt_dir}
-$ sudo mv osfall2021-team8/test/test ${mnt_dir}/root/
+$ sudo mv osfall2021-team8/test.c ${mnt_dir}/root/
 $ sudo umount ${mnt_dir}
 
 # Qemu를 실행하여 tiaen shell에 접속한 뒤 ./test 파일을 실행합니다

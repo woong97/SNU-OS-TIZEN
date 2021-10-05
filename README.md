@@ -99,7 +99,7 @@ asmlinkage int sys_ptree(struct prinfo *buf, int *nr){
 $ sudo ./build-rpi3-arm64.sh && sudo ./scripts/mkbootimg_rpi3.sh
 
 # 새로 생긴 두 이미지 boot.img, modules.img를 tizen image들이 모여 있는 상위 디렉토리 tizen-image 디렉토리 안으로 옮깁니다
-$ mv *.img ../tiaen-image/
+$ mv *.img ../tizen-image/
 
 # test.c 파일을 compile합니다
 $ arm-linux-gnueabi-gcc -I$(pwd)/include ./test/test_ptree.c -o ./test/test
@@ -110,7 +110,7 @@ $ sudo mount -v -o loop ${tizen-image directory}/rootfs.img ${mnt_dir}
 $ sudo mv osfall2021-team8/test/test ${mnt_dir}/root/
 $ sudo umount ${mnt_dir}
 
-# Qemu를 실행하여 tiaen shell에 접속한 뒤 ./test 파일을 실행합니다
+# Qemu를 실행하여 tizen shell에 접속한 뒤 ./test 파일을 실행합니다
 $ cd ${osfall2021-team8 directory}
 $ sudo ./qemu.sh
 

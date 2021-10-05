@@ -17,7 +17,7 @@ struct task_struct {
 ```
 저희 조의 구현에서 활용한 필드만 나열한 `task_struct`의 구조입니다.  
 이 중 `state`와 `pid`, `comm`은 그대로 `prinfo`의 field로 복사됩니다.  
-`struct cred`는 `uid`를 field로 가지고 있으므로 `cred->uid`를 `prinfo`의 `uid` 로 복사해줍니다.  
+`struct cred`는 `uid`를 field로 가지고 있으므로 `(cred->uid).val`를 `prinfo`의 `uid` 로 복사해줍니다.  
 `parent`의 경우도 간단하게 `parent->pid`를 복사해주면 됩니다.  
 남는 것은 `struct list_head` 타입의 두 필드입니다. 이에 대해서는 다음 절에서 설명하겠습니다.
 ### 1.2. `list_head`와 tasklist의 구조

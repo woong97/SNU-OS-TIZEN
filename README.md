@@ -42,7 +42,7 @@ Help documents와 reference에서 언급된 것과 같이, `list_head`는 doubly
 
 위와 같은 방식으로 순회하면서 `task_struct` 구조체의 정보를 `prinfo` 구조체로 옮겨주고, 그것을 user space에 복사해주는 것이 `sys_ptree`의 역할입니다.
 
-### 2.2. Implementation
+### 2.2. Implementation - sys_ptree.c
 1. user space와 kernel space의 메모리주소가 다르니, kernel에서 user space에 있는 데이터를 바로 접근할 수 없습니다. 따라서 user space에 있는 data를 kernel space로 copy 해줘야 합니다.
 이 때 사용하는 함수가 copy_from_user이고, 그 반대 과정이 copy_to_user입니다.
 
@@ -90,7 +90,21 @@ asmlinkage int sys_ptree(struct prinfo *buf, int *nr){
 	kfree(kernel_buf);
 	return *nr;
 ```
-
+### 2.3. Implementation - System Call
+1. arch/arm64/include/asm/unistd32.h에 sys_ptree를 등록해줍니다.
+``` C
+#define __NR_sys_ptree 398
+__SYSCALL(__NR_sys_ptree, sys_ptree)
+```
+2. arch/arm64/include/asm/unistd.h 수정
+``` C
+#define __NR_compat_syscalls 399
+```
+3. arch/am/tools/syscall.tbl에 sys_ptree 추가
+table에 row(398, common, ptree, sys_ptree) 추가
+4. include/linux/prinfo.h에 struct prinfo 선언
+5. include/linux/syscalls.h에 prinfo.h를 include하고 sys_ptree의 원형을 선언
+6. 위 2.2에서 쓴 것과 같은 형태로 kernel/ptree.c를 구현
 
 
 ## 3. Build

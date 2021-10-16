@@ -67,7 +67,6 @@ struct perf_event_attr;
 struct file_handle;
 struct sigaltstack;
 union bpf_attr;
-struct prinfo;
 
 #include <linux/types.h>
 #include <linux/aio_abi.h>
@@ -81,7 +80,6 @@ struct prinfo;
 #include <linux/quota.h>
 #include <linux/key.h>
 #include <trace/syscall.h>
-#include <linux/prinfo.h>
 
 /*
  * __MAP - apply a macro to syscall arguments
@@ -942,5 +940,5 @@ asmlinkage long sys_pkey_alloc(unsigned long flags, unsigned long init_val);
 asmlinkage long sys_pkey_free(int pkey);
 asmlinkage long sys_statx(int dfd, const char __user *path, unsigned flags,
 			  unsigned mask, struct statx __user *buffer);
-asmlinkage int sys_ptree(struct prinfo *buf, int *nr);
+
 #endif

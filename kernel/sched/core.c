@@ -6759,13 +6759,13 @@ const u32 sched_prio_to_wmult[40] = {
  /*  15 */ 119304647, 148102320, 186737708, 238609294, 286331153,
 };
 
-asmlinkage long sys_sched_setweight(pid_t pid, int weight) {
+SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight) {
 	// TODO!!!
 	printk("Hello sched_setweight!\n");
 	return 0;
 }
 
-asmlinkage long sys_sched_getweight(pid_t pid) {
+SYSCALL_DEFINE1(sched_getweight, pid_t, pid) {
 	// TODO!!!
 	printk("Hello sched_getweight!\n");
 	return 0;

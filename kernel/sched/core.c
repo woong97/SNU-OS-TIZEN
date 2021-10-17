@@ -3040,6 +3040,7 @@ void scheduler_tick(void)
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
 	trigger_load_balance(rq);
+	trigger_load_balance_wrr(rq);
 #endif
 	rq_last_tick_reset(rq);
 }
@@ -5864,6 +5865,7 @@ void __init sched_init(void)
 		rq->calc_load_update = jiffies + LOAD_FREQ;
 		init_cfs_rq(&rq->cfs);
 		init_rt_rq(&rq->rt);
+		init_wrr_rq(&rq->wrr);
 		init_dl_rq(&rq->dl);
 #ifdef CONFIG_FAIR_GROUP_SCHED
 		root_task_group.shares = ROOT_TASK_GROUP_LOAD;
@@ -6756,3 +6758,15 @@ const u32 sched_prio_to_wmult[40] = {
  /*  10 */  39045157,  49367440,  61356676,  76695844,  95443717,
  /*  15 */ 119304647, 148102320, 186737708, 238609294, 286331153,
 };
+
+asmlinkage long sys_sched_setweight(pid_t pid, int weight) {
+	// TODO!!!
+	printk("Hello sched_setweight!\n");
+	return 0;
+}
+
+asmlinkage long sys_sched_getweight(pid_t pid) {
+	// TODO!!!
+	printk("Hello sched_getweight!\n");
+	return 0;
+}

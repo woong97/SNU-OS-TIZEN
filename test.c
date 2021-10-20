@@ -10,5 +10,6 @@ int main(int argc, char* argv[]) {
 	// system call test
 	ret = syscall(SCHED_SETWEIGHT_SYS_NUM, 0, 0);
 	ret = syscall(SCHED_GETWEIGHT_SYS_NUM, 0);
+	printf("Hello main\n");
 	return 0;
 }

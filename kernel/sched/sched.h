@@ -5,6 +5,7 @@
 #include <linux/sched/sysctl.h>
 #include <linux/sched/topology.h>
 #include <linux/sched/rt.h>
+#include <linux/sched/wrr.h>
 #include <linux/sched/deadline.h>
 #include <linux/sched/clock.h>
 #include <linux/sched/wake_q.h>
@@ -140,6 +141,11 @@ static inline int dl_policy(int policy)
 {
 	return policy == SCHED_DEADLINE;
 }
+
+static inline int wrr_policy(int policy)
+{
+	return policy == SCHED_WRR;
+}
 static inline bool valid_policy(int policy)
 {
 	return idle_policy(policy) || fair_policy(policy) ||
@@ -154,6 +160,11 @@ static inline int task_has_rt_policy(struct task_struct *p)
 static inline int task_has_dl_policy(struct task_struct *p)
 {
 	return dl_policy(p->policy);
+}
+
+static inline int task_has_wrr_policy(struct task_struct *p)
+{
+	return wrr_policy(p->policy);
 }
 
 /*
@@ -544,6 +555,8 @@ struct rt_rq {
 
 struct wrr_rq {
 	// TODO!!!
+	struct list_head list;
+	int weight_sum;
 };
 
 /* Deadline class' related fields in a runqueue */

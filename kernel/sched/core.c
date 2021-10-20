@@ -16,7 +16,6 @@
 #include <linux/init_task.h>
 #include <linux/context_tracking.h>
 #include <linux/rcupdate_wait.h>
-
 #include <linux/blkdev.h>
 #include <linux/kprobes.h>
 #include <linux/mmu_context.h>
@@ -2202,7 +2201,9 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->rt.time_slice	= sched_rr_timeslice;
 	p->rt.on_rq		= 0;
 	p->rt.on_list		= 0;
-
+	
+	p->wrr.time_slice	= WRR_TIMESLICE;
+	p->wrr.weight		= WRR_DEFAULT_WEIGHT;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
@@ -2373,7 +2374,13 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->rt_priority = 0;
 		} else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
-
+		/*
+		else if (task_has_wrr_policy(p)) {
+			// TODO!!!
+			// I'm not sure we need this
+			p->static_prio = NICE_TO_PRIO(0);
+		} 
+		*/
 		p->prio = p->normal_prio = __normal_prio(p);
 		set_load_weight(p);
 
@@ -2383,8 +2390,10 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 		 */
 		p->sched_reset_on_fork = 0;
 	}
-
-	if (dl_prio(p->prio)) {
+	
+	if (p->policy == SCHED_WRR) {
+		p->sched_class = &wrr_sched_class;
+	} else if (dl_prio(p->prio)) {
 		put_cpu();
 		return -EAGAIN;
 	} else if (rt_prio(p->prio)) {
@@ -3981,7 +3990,9 @@ static void __setscheduler(struct rq *rq, struct task_struct *p,
 	p->prio = normal_prio(p);
 	if (keep_boost)
 		p->prio = rt_effective_prio(p, p->prio);
-
+	
+	if (p->policy == SCHED_WRR)
+		p->sched_class = &wrr_sched_class;
 	if (dl_prio(p->prio))
 		p->sched_class = &dl_sched_class;
 	else if (rt_prio(p->prio))

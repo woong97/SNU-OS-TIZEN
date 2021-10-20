@@ -4,10 +4,16 @@
 
 #include "sched.h"
 
+int sched_wrr_timeslice = WRR_TIMESLICE;
+int sysctl_sched_wrr_timeslice = (MSEC_PER_SEC / HZ) * WRR_TIMESLICE;
+int sched_wrr_default_weight = WRR_DEFAULT_WEIGHT;
+
 // It is possible to unncessary!
 void init_wrr_rq(struct wrr_rq *wrr_rq)
 {
 	// TODO!!!
+	INIT_LIST_HEAD(&(wrr_rq->list));
+	wrr_rq->weight_sum = 0;
 }
 
 static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)

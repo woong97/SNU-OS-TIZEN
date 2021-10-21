@@ -555,7 +555,7 @@ struct rt_rq {
 
 struct wrr_rq {
 	// TODO!!!
-	struct list_head list;
+	struct list_head run_list;
 	int weight_sum;
 };
 

@@ -10,7 +10,8 @@ struct task_struct;
  *  * default timeslice is 100 msecs (used only for SCHED_RR tasks).
  *   * Timeslices get refilled after they expire.
  *    */
-#define WRR_TIMESLICE		(100 * HZ / 1000)
+#define WRR_TIMESLICE		(10 * HZ / 1000)
 #define WRR_DEFAULT_WEIGHT	10
+#define WRR_DEFAULT_TIMESLICE	(WRR_TIMESLICE * WRR_DEFAULT_WEIGHT)
 
 #endif

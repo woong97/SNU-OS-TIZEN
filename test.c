@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
 	int ret;
 	
 	if (argc < 2) {
-		printf("Insufficient input arguments\n");
+		printf("Insufficient input arguments [ ex) ./test 24 ]\n");
 		return EXIT_FAILURE;
 	}
 	// system call test

@@ -194,6 +194,7 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 
 }
 
+// Q. Why rt,c don't need task_fork?
 static void task_fork_wrr(struct task_struct *p)
 {
 	// copy from fair.c
@@ -209,16 +210,69 @@ static void task_fork_wrr(struct task_struct *p)
 	rq_unlock(rq, &rf);
 }
 
+// Q. Why don't we need task_dead ?
 static void task_dead_wrr(struct task_struct *p)
 {
 }
 
-static void switched_from_wrr(struct rq *this_rq, struct task_struct *task)
+/* Maybe this is called when task change from wrr scheduler to fair scheduler
+ * If task was last of qeuee, pull other wrr task in other runqueu
+ * Other people doesn't implement this function
+ * I'm not sure this is correct. Need check!!!!!!!!!!! Help me!!!
+ */
+static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 {
+	int cpu;
+	int hijacked_cpu;
+	int max_weight_sum = 0;
+	struct rq *hijacked_rq = NULL;
+	struct rq *tmp_rq = NULL;
+	struct task_struct *hijacked_task;
+	struct sched_wrr_entity *hijacked_wrr_se;
+	bool resched = false;
+	// int dequee_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
+
+	// If some task already exsits in rq, just return
+	if (!task_on_rq_queued(p) || (rq->wrr.weight_sum > 0))
+		return;
+	// Pull other task in other wrr runqueue
+	// I'm not sure we need lock
+	
+	for_each_online_cpu(cpu) {
+		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
+			continue;
+		tmp_rq = cpu_rq(cpu);
+		double_lock_balance(rq, tmp_rq);
+		// I want to find runqeue which has more than 1 task
+		// tmp_rq->curr->wrr.weight != tmp_rq->wrr.weight_sum : if current task's weight = runqueue's weight_sum, 
+		// It means that this runqueue has only one task
+		if ((tmp_rq->wrr.weight_sum > max_weight_sum) && (tmp_rq->curr->wrr.weight != tmp_rq->wrr.weight_sum)) {
+			max_weight_sum = tmp_rq->wrr.weight_sum;
+			hijacked_rq = tmp_rq;
+			hijacked_cpu = cpu;
+			resched = true;
+		}
+		double_unlock_balance(rq, tmp_rq);
+	}
+
+	if (resched) {
+		// I want to find current task's next task in hijected runqueue.
+		// The reason why I pick next (not chossing highest weight task) is that
+		// I want to decrease searching cos : It's my imagination
+		hijacked_wrr_se = container_of(hijacked_rq->curr->wrr.run_list.next, struct sched_wrr_entity, run_list);
+		hijacked_task = wrr_task_of(hijacked_wrr_se);
+		deactivate_task(hijacked_rq, hijacked_task, 0);
+		set_task_cpu(hijacked_task, hijacked_cpu);
+		activate_task(rq, hijacked_task, 0);
+		resched_curr(rq);
+	}
 }
 
-static void switched_to_wrr(struct rq *this_rq, struct task_struct *task)
+static void switched_to_wrr(struct rq *rq, struct task_struct *p)
 {
+	struct sched_wrr_entity *wrr_se = &p->wrr;
+	wrr_se->weight = WRR_DEFAULT_WEIGHT;
+	wrr_se->time_slice = WRR_DEFAULT_TIMESLICE;
 }
 
 static void prio_changed_wrr(struct rq *this_rq, struct task_struct *task, int oldprio)

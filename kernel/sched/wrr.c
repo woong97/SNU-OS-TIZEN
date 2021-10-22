@@ -31,7 +31,7 @@ static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	// Q2. raw_spin_lock vs rcu_read_lock : which one is correct ?
 	
 	/* rcu_read_lock(); */
-	wrr_se->time_slice = wrr_se->weight * sched_wrr_timeslice;
+	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 	list_add_tail(&wrr_se->run_list, &wrr_rq->run_list);
 	wrr_rq->weight_sum += wrr_se->weight;
 	add_nr_running(rq, 1);
@@ -105,8 +105,39 @@ static void put_prev_task_wrr(struct rq *rq, struct task_struct *p)
 }
 
 #ifdef CONFIG_SMP
-static int select_task_rq_wrr(struct task_struct *p, int task_cpu, int sd_flag, int flags)
+// very important function
+// Some creative idea can be adapted to here
+// For now, just move task to seleceted cpu which has the smallest weight sum
+static int select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
+	struct rq *rq;
+	int min_weight_sum;
+	int target_cpu = -1;
+	/* For anything but wake ups, just return the task_cpu 
+	 * Let's test whethere under two lines are helpful or not 
+	 */
+	if (sd_flag != SD_BALANCE_WAKE && sd_flag != SD_BALANCE_FORK)
+		goto out;
+	rq = cpu_rq(cpu);
+
+	// initialize min weight sum as current rq's weight_sum
+	min_weight_sum = rq->wrr.weight_sum;
+
+	rcu_read_lock();
+	for_each_online_cpu(cpu) {
+		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
+			continue;
+		rq = cpu_rq(cpu);
+		if (rq->wrr.weight_sum < min_weight_sum) {
+			min_weight_sum = rq->wrr.weight_sum;
+			target_cpu = cpu;
+		}
+	}
+	if (target_cpu >= 0) 
+		cpu = target_cpu;
+	rcu_read_unlock();
+out:
+	return cpu;
 }
 
 static void migrate_task_rq_wrr(struct task_struct *p)
@@ -136,6 +167,50 @@ static void set_curr_task_wrr(struct rq *rq)
 
 static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 {
+
+	struct sched_wrr_entity *wrr_se = &p->wrr;
+	
+	// copy from rt.c
+	if (p->policy != SCHED_WRR)
+		return;
+	if (--p->wrr.time_slice)
+		return;
+
+	// In rt.c set time_slice again, but we don't have to do this.
+	// Because we set time slice at requeue_task_rr
+	// Nedd to check my assertion is right
+	/* p->wrr.time_slilce = wrr_se->weight * WRR_TIMESLICE; */
+	
+	// copy from rt.c
+	// Q. some people use set_tsk_need_resched instead of resched_curr -> why??
+	// set_tsk_need_resched is called inside of resched_curr
+	// Key difference is set_preempt_need_resched() which is called in resched_curr
+	// I don't know the role of set_preempt_need_resched()
+	if (wrr_se->run_list.prev != wrr_se->run_list.next) {
+		requeue_task_wrr(rq, p, 0);
+		resched_curr(rq);
+		return;
+	}
+
+}
+
+static void task_fork_wrr(struct task_struct *p)
+{
+	// copy from fair.c
+	struct rq_flags rf;
+	struct rq *rq = this_rq();
+	struct sched_wrr_entity *wrr_se = &p->wrr;
+	// Q. other student didn't use lock. Should we need lock?
+	// fair.c use lock - should check this
+	rq_lock(rq, &rf);
+	update_rq_clock(rq);
+	wrr_se->weight = p->parent->wrr.weight;
+	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
+	rq_unlock(rq, &rf);
+}
+
+static void task_dead_wrr(struct task_struct *p)
+{
 }
 
 static void switched_from_wrr(struct rq *this_rq, struct task_struct *task)
@@ -152,6 +227,10 @@ static void prio_changed_wrr(struct rq *this_rq, struct task_struct *task, int o
 
 static unsigned int get_rr_interval_wrr(struct rq *rq, struct task_struct *task)
 {
+	if (task->policy == SCHED_WRR)
+		return task->wrr.weight * WRR_TIMESLICE;
+	else
+		return 0;
 }
 
 static void update_curr_wrr(struct rq *rq)
@@ -176,7 +255,8 @@ const struct sched_class wrr_sched_class = {
 
 #ifdef	CONFIG_SMP
 	.select_task_rq		= select_task_rq_wrr,
-	
+	.migrate_task_rq	= migrate_task_rq_wrr,
+
 	.set_cpus_allowed	= set_cpus_allowed_common,
 	.rq_online		= rq_online_wrr,
 	.rq_offline		= rq_offline_wrr,
@@ -186,7 +266,8 @@ const struct sched_class wrr_sched_class = {
 
 	.set_curr_task		= set_curr_task_wrr,
 	.task_tick		= task_tick_wrr,
-
+	.task_fork		= task_fork_wrr,
+	.task_dead		= task_dead_wrr,
 	.get_rr_interval	= get_rr_interval_wrr,
 	.prio_changed		= prio_changed_wrr,
 	.switched_to		= switched_to_wrr,

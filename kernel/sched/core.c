@@ -38,6 +38,7 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
+#include <linux/sched/wrr.h>
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
@@ -6771,13 +6772,64 @@ const u32 sched_prio_to_wmult[40] = {
 };
 
 SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight) {
-	// TODO!!!
-	printk("Hello sched_setweight!\n");
-	return 0;
+	struct task_struct *p;
+	struct rq *rq;
+	kuid_t root_uid;
+	int retval;
+	
+	if (weight < WRR_MIN_WEIGHT || weight > WRR_MAX_WEIGHT)
+		return -EINVAL;
+	if (pid < 0)
+		return -EINVAL;
+	if (pid == 0)
+		p = current;
+	
+	retval = -ESRCH;
+	root_uid = KUIDT_INIT(0);
+	
+	rcu_read_lock();
+	p = find_process_by_pid(pid);
+	if (p) {
+		int current_weight = p->wrr.weight;
+		if (p->policy != SCHED_WRR)
+			retval = -EPERM;
+		if (uid_eq(current_uid(), task_uid(p)) || uid_eq(current_uid(), root_uid)) {
+			if (!uid_eq(current_uid(), root_uid) && current_weight < weight) {
+				retval = -EPERM;
+			} else {
+				p->wrr.weight = (unsigned int) weight;
+				p->wrr.time_slice = p->wrr.weight * WRR_TIMESLICE;
+				
+				rq = task_rq(p);
+				rq->wrr.weight_sum -= current_weight;
+				rq->wrr.weight_sum += weight;
+				retval = 0;
+			}
+		} else {
+			retval = -EPERM;
+		}
+	}
+	rcu_read_unlock();
+	return retval;
 }
 
+// reference: SYSCALL_DEFINE1(sched_getscheduler, pid_t, pid)
 SYSCALL_DEFINE1(sched_getweight, pid_t, pid) {
-	// TODO!!!
-	printk("Hello sched_getweight!\n");
-	return 0;
+	struct task_struct *p;
+	int retval;
+	
+	if (pid < 0)
+		return -EINVAL;
+	
+	if (pid == 0)
+		return current->wrr.weight;
+	
+	retval = -ESRCH;
+	rcu_read_lock();
+	p = find_process_by_pid(pid);
+	if (p) {
+		retval = p->wrr.weight;
+	}
+	rcu_read_unlock();
+	return retval;
 }

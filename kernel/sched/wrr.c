@@ -3,12 +3,13 @@
  * */
 
 #include "sched.h"
+#include <linux/jiffies.h>
+
 
 int sched_wrr_timeslice = WRR_TIMESLICE;
 int sysctl_sched_wrr_timeslice = (MSEC_PER_SEC / HZ) * WRR_DEFAULT_TIMESLICE;
 int sched_wrr_default_weight = WRR_DEFAULT_WEIGHT;
 static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
-
 
 void __init init_sched_wrr_class(void) {
 	unsigned int i;
@@ -278,7 +279,7 @@ static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 		hijacked_wrr_se = container_of(hijacked_rq->curr->wrr.run_list.next, struct sched_wrr_entity, run_list);
 		hijacked_task = wrr_task_of(hijacked_wrr_se);
 		deactivate_task(hijacked_rq, hijacked_task, 0);
-		set_task_cpu(hijacked_task, hijacked_cpu);
+		set_task_cpu(hijacked_task, cpu_of(rq));
 		activate_task(rq, hijacked_task, 0);
 		resched_curr(rq);
 	}
@@ -307,9 +308,80 @@ static void update_curr_wrr(struct rq *rq)
 {
 }
 
-void trigger_load_balance_wrr(struct rq *rq)
+/* Need to research lock!!
+ * In order to save jiffies time for load balance, we need load balance lock or save time at core.c
+ * preempt_enable(), prempt_disable()
+ * raw_spin_lock(), raw_spin_unlock(), 
+ * spin_lock_irqsave
+ */
+void trigger_load_balance_wrr()
 {
+	int cpu;
+	struct rq *tmp_rq;
+	unsigned int tmp_weight_sum;
+
+	struct rq *src_rq = NULL;
+	struct rq *trg_rq = NULL;
+	int max_weight_sum = -1;
+	int min_weight_sum = -1;
+
+	int max_weight = 0;
+	int tmp_weight = 0;
+	struct sched_wrr_entity *tmp_wrr_se;
+	struct task_struct *src_p = NULL;
+	struct task_struct *tmp_p;
+	
+	// prev_jiffies is not impolemented yet 
 	// TODO!!!
+	/* if(!time_after_eq(jiffies, prev_jiffies + 2 * HZ))
+		return;
+	*/
+	rcu_read_lock();
+	for_each_online_cpu(cpu) {
+		tmp_rq = cpu_rq(cpu);
+		tmp_weight_sum = tmp_rq->wrr.weight_sum;
+		if (max_weight_sum == -1 && min_weight_sum == -1) {
+			max_weight_sum = tmp_weight_sum;
+			min_weight_sum = tmp_weight_sum;
+		} else {
+			if (tmp_weight_sum > max_weight_sum) {
+				max_weight_sum = tmp_weight_sum;
+				src_rq = tmp_rq; 
+			}
+
+			if (tmp_weight_sum < min_weight_sum) {
+				min_weight_sum = tmp_weight_sum;
+				trg_rq = tmp_rq;
+			}
+		}
+
+	}
+	rcu_read_unlock();
+
+	if (src_rq == NULL || trg_rq == NULL)
+		return;
+
+	double_rq_lock(src_rq, trg_rq);
+	list_for_each_entry(tmp_wrr_se, &(src_rq->wrr.run_list), run_list) {
+		tmp_p = wrr_task_of(tmp_wrr_se);
+		tmp_weight = tmp_p->wrr.weight;
+
+		if ((src_rq->curr != tmp_p) && 
+			(src_rq->wrr.weight_sum - tmp_weight >= trg_rq->wrr.weight_sum + tmp_weight) && (tmp_weight > max_weight)) {
+			src_p = tmp_p;
+			max_weight = tmp_weight;
+		}
+	}
+	double_rq_unlock(src_rq, trg_rq);
+
+	if (src_p == NULL)
+		return;
+
+	deactivate_task(src_rq, src_p, 0);
+	set_task_cpu(src_p, cpu_of(trg_rq));
+	activate_task(trg_rq, src_p, 0);
+	resched_curr(trg_rq);
+
 }
 
 const struct sched_class wrr_sched_class = {

@@ -7,6 +7,18 @@
 int sched_wrr_timeslice = WRR_TIMESLICE;
 int sysctl_sched_wrr_timeslice = (MSEC_PER_SEC / HZ) * WRR_DEFAULT_TIMESLICE;
 int sched_wrr_default_weight = WRR_DEFAULT_WEIGHT;
+static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
+
+
+void __init init_sched_wrr_class(void) {
+	unsigned int i;
+
+	for_each_possible_cpu(i) {
+		zalloc_cpumask_var_node(&per_cpu(local_cpu_mask, i), GFP_KERNEL, cpu_to_node(i));
+	}
+	current->wrr.weight = WRR_DEFAULT_WEIGHT;
+}
+
 
 // It is possible to unncessary!
 void init_wrr_rq(struct wrr_rq *wrr_rq)
@@ -26,7 +38,6 @@ static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *wrr_rq = &(rq->wrr);
-	
 	// Q1. Do we need lock???
 	// Q2. raw_spin_lock vs rcu_read_lock : which one is correct ?
 	
@@ -44,12 +55,11 @@ static void dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct wrr_rq *wrr_rq = &(rq->wrr);
 
 	// Q1. Do we need lock??
-	
-	/* rcu_read_lock() */
+	/* rcu_read_lock(); */
 	list_del_init(&wrr_se->run_list);
 	wrr_rq->weight_sum -= wrr_se->weight;
 	sub_nr_running(rq, 1);
-	/* rcu_read_unlock()*/
+	/* rcu_read_unlock(); */
 }
 
 static void requeue_task_wrr(struct rq *rq, struct task_struct *p, int head)
@@ -69,8 +79,7 @@ static void requeue_task_wrr(struct rq *rq, struct task_struct *p, int head)
 	 * 	list_move_tail(&wrr_se->run_list, &wrr_rq->run_list);
 	 */
 
-	/* rcu_read_unlock() */
-
+	/* rcu_read_unlock(); */
 }
 static void yield_task_wrr(struct rq *rq)
 {
@@ -93,6 +102,9 @@ static struct task_struct *pick_next_task_wrr(struct rq *rq, struct task_struct 
 	}
 
 	next_se = list_first_entry(&wrr_rq->run_list, struct sched_wrr_entity, run_list);
+	if (!next_se) {
+		return NULL;
+	}
 	next_task_struct = wrr_task_of(next_se);
 	next_task_struct->se.exec_start = rq->clock_task;
 	next_se->time_slice = next_se->weight * WRR_TIMESLICE;
@@ -169,8 +181,9 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 {
 
 	struct sched_wrr_entity *wrr_se = &p->wrr;
-	
 	// copy from rt.c
+	if (p == NULL)
+		return;
 	if (p->policy != SCHED_WRR)
 		return;
 	if (--p->wrr.time_slice)
@@ -191,23 +204,20 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 		resched_curr(rq);
 		return;
 	}
-
 }
 
 // Q. Why rt,c don't need task_fork?
 static void task_fork_wrr(struct task_struct *p)
 {
 	// copy from fair.c
-	struct rq_flags rf;
-	struct rq *rq = this_rq();
 	struct sched_wrr_entity *wrr_se = &p->wrr;
+	if (p == NULL)
+		return;
 	// Q. other student didn't use lock. Should we need lock?
 	// fair.c use lock - should check this
-	rq_lock(rq, &rf);
-	update_rq_clock(rq);
+	// if we use rq_lock in this part like fair.c -> bug occured when we use fork at test.c
 	wrr_se->weight = p->parent->wrr.weight;
 	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
-	rq_unlock(rq, &rf);
 }
 
 // Q. Why don't we need task_dead ?
@@ -217,9 +227,12 @@ static void task_dead_wrr(struct task_struct *p)
 
 /* Maybe this is called when task change from wrr scheduler to fair scheduler
  * If task was last of qeuee, pull other wrr task in other runqueu
- * Other people doesn't implement this function
+ * Other people doesn't implement this function(why?...)
  * I'm not sure this is correct. Need check!!!!!!!!!!! Help me!!!
  */
+
+//static void switched_from_wrr(struct rq *rq, struct task_struct *p) {
+//}
 
 
 static void switched_from_wrr(struct rq *rq, struct task_struct *p)
@@ -239,7 +252,7 @@ static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 		return;
 	// Pull other task in other wrr runqueue
 	// I'm not sure we need lock
-	
+	rcu_read_lock();
 	for_each_online_cpu(cpu) {
 		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
 			continue;
@@ -256,6 +269,7 @@ static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 		}
 		double_unlock_balance(rq, tmp_rq);
 	}
+	rcu_read_unlock();
 
 	if (resched) {
 		// I want to find current task's next task in hijected runqueue.

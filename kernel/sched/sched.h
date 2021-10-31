@@ -1561,6 +1561,7 @@ extern void update_max_interval(void);
 
 extern void init_sched_dl_class(void);
 extern void init_sched_rt_class(void);
+extern void init_sched_wrr_class(void);
 extern void init_sched_fair_class(void);
 
 extern void resched_curr(struct rq *rq);

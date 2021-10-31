@@ -13,7 +13,7 @@
 #define SCHED_SETWEIGHT_SYS_NUM		398
 #define SCHED_GETWEIGHT_SYS_NUM		399
 #define SCHED_WRR			7
-
+#define MAX_WEIGHT			20
 
 int naive_factorization(int number)
 {
@@ -43,46 +43,58 @@ int naive_factorization(int number)
 	return EXIT_SUCCESS;
 }
 
-int child(int num) {
+double child(int num) {
 	double t_start = clock();
 	if (naive_factorization(num) < 0) {
-		printf("factorization failed,  errno = %d\n", errno);
-		return EXIT_FAILURE;
+		printf("Child %d - Factorization failed,  errno = %d\n", getpid(), errno);
+		exit(EXIT_FAILURE);
 	}
 	double t_end = clock();
 	double spend_time = (double)(t_end - t_start)/CLOCKS_PER_SEC;
-	printf("Factorization takes %f\n", spend_time);
-	return EXIT_SUCCESS;
+	return spend_time;
 }
 
 
 int main(int argc, char* argv[]) {
 	int ret;
-	pid_t pid;
 	struct sched_param param;
 	param.sched_priority = 0;
 
-	if (argc < 2) {
-		printf("Insufficient input arguments [ ex) ./test 24 ]\n");
+	if (argc < 3) {
+		printf("Insufficient input arguments [ ex) ./test (nprocess) (number) ]\n");
 		return EXIT_FAILURE;
+	}
+	int nproc = atoi(argv[1]);
+	pid_t pid[nproc];
+	int weights[nproc];
+	srand(time(NULL));
+	for (int i = 0; i < nproc; i ++) {
+		weights[i] = rand() % MAX_WEIGHT + 1;
+	}
+	for (int i = 0; i < nproc; i++) {
+		pid[i] = fork();
+		if (pid[i] == 0) {
+			if (syscall(SET_SCHEDULER_SYS_NUM, getpid(), SCHED_WRR, &param)) {
+				perror("set scheduler failed!");
+				exit(EXIT_FAILURE);
+			}
+			if (syscall(SCHED_SETWEIGHT_SYS_NUM, getpid(), weights[i]) < 0) {
+				perror("Child %d setweight failed");
+				exit(EXIT_FAILURE);
+			}
+			double spend_time = child(atoi(argv[2]));
+			printf("Child %d (weight=%d) -> Factorization takes %f\n", getpid(), weights[i], spend_time);
+			exit(EXIT_SUCCESS);
+		}
 	}
 	
-	if (syscall(SET_SCHEDULER_SYS_NUM, getpid(), SCHED_WRR, &param)) {
-		perror("set scheduler failed!");
-		return EXIT_FAILURE;
-	}
-
-	pid = fork();
-	if (pid == 0) {
-		child(atoi(argv[1]));
-		return EXIT_SUCCESS;
-	} else if (pid > 0) {
+	for (int i = 0; i < nproc; i++) {
 		int status;
-		waitpid(pid, &status, 0);
+		waitpid(pid[i], &status, 0); 
 		if WIFEXITED(status) {
-			printf("Child terminated normally\n");
+			printf("Child %d terminated normally\n", pid[i]);
 		} else {
-			printf("Child terminated abnormally\n");
+			printf("Child %d terminated abnormally\n", pid[i]);
 			return EXIT_FAILURE;
 		}
 	}

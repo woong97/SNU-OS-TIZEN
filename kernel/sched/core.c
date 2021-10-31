@@ -3050,7 +3050,7 @@ void scheduler_tick(void)
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
 	trigger_load_balance(rq);
-	trigger_load_balance_wrr(rq);
+	//trigger_load_balance_wrr(rq);
 #endif
 	rq_last_tick_reset(rq);
 }
@@ -3753,6 +3753,10 @@ void rt_mutex_setprio(struct task_struct *p, struct task_struct *pi_task)
 		if (oldprio < prio)
 			queue_flag |= ENQUEUE_HEAD;
 		p->sched_class = &rt_sched_class;
+	} else if (p->policy == SCHED_WRR) {
+		if (dl_prio(oldprio))
+			p->dl.dl_boosted = 0;
+		p->sched_class = &wrr_sched_class;
 	} else {
 		if (dl_prio(oldprio))
 			p->dl.dl_boosted = 0;
@@ -4032,6 +4036,7 @@ static int __sched_setscheduler(struct task_struct *p,
 	int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
 	struct rq *rq;
 
+
 	/* The pi code expects interrupts enabled */
 	BUG_ON(pi && in_interrupt());
 recheck:
@@ -4049,7 +4054,7 @@ recheck:
 	if (attr->sched_flags &
 		~(SCHED_FLAG_RESET_ON_FORK | SCHED_FLAG_RECLAIM))
 		return -EINVAL;
-
+	
 	/*
 	 * Valid priorities for SCHED_FIFO and SCHED_RR are
 	 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
@@ -4145,6 +4150,8 @@ recheck:
 		if (fair_policy(policy) && attr->sched_nice != task_nice(p))
 			goto change;
 		if (rt_policy(policy) && attr->sched_priority != p->rt_priority)
+			goto change;
+		if (wrr_policy(policy))
 			goto change;
 		if (dl_policy(policy) && dl_param_changed(p, attr))
 			goto change;
@@ -5070,6 +5077,7 @@ SYSCALL_DEFINE1(sched_get_priority_max, int, policy)
 	case SCHED_NORMAL:
 	case SCHED_BATCH:
 	case SCHED_IDLE:
+	case SCHED_WRR:
 		ret = 0;
 		break;
 	}
@@ -5762,6 +5770,7 @@ void __init sched_init_smp(void)
 	free_cpumask_var(non_isolated_cpus);
 
 	init_sched_rt_class();
+	init_sched_wrr_class();
 	init_sched_dl_class();
 
 	sched_smp_initialized = true;

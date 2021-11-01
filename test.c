@@ -15,7 +15,7 @@
 #define SCHED_WRR			7
 #define MAX_WEIGHT			20
 
-int naive_factorization(int number)
+int naive_factorization(long long number)
 {
 	if (number <= 0) return -EINVAL;
 	if (number == 1) {
@@ -23,27 +23,27 @@ int naive_factorization(int number)
 		return EXIT_SUCCESS;
 	}
 	
-	int original_number = number;
+	long long original_number = number;
 	char *output = "";
-	for (int i = 2; i < original_number; i++) {
+	for (long long i = 2; i < original_number; i++) {
 		if ((number % i) == 0) {
 			number /= i; 
 			if (strlen(output) == 0) {
-				if(asprintf(&output, "%d", i) == -1) return -ENOMEM;
+				if(asprintf(&output, "%lld", i) == -1) return -ENOMEM;
 			} else {
-		       		if(asprintf(&output, "%s * %d", output, i) == -1) return -ENOMEM;
+		       		if(asprintf(&output, "%s * %lld", output, i) == -1) return -ENOMEM;
 			}
 			i--;
 		}
 	}
 
 	if (original_number == number)
-		if(asprintf(&output, "%d", number) == -1) return -ENOMEM;
-	printf("%d = %s\n", original_number, output);
+		if(asprintf(&output, "%lld", number) == -1) return -ENOMEM;
+	printf("%lld = %s\n", original_number, output);
 	return EXIT_SUCCESS;
 }
 
-double child(int num) {
+double child(long long num) {
 	double t_start = clock();
 	if (naive_factorization(num) < 0) {
 		printf("Child %d - Factorization failed,  errno = %d\n", getpid(), errno);
@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
 				perror("Child %d setweight failed");
 				exit(EXIT_FAILURE);
 			}
-			double spend_time = child(atoi(argv[2]));
+			double spend_time = child(atoll(argv[2]));
 			printf("Child %d (weight=%d) -> Factorization takes %f\n", getpid(), weights[i], spend_time);
 			exit(EXIT_SUCCESS);
 		}

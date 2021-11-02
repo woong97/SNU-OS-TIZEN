@@ -5,6 +5,8 @@
 #include "sched.h"
 #include <linux/jiffies.h>
 
+static spinlock_t wrr_lb_lock;
+static unsigned long prev_jiffies;
 
 int sched_wrr_timeslice = WRR_TIMESLICE;
 int sysctl_sched_wrr_timeslice = (MSEC_PER_SEC / HZ) * WRR_DEFAULT_TIMESLICE;
@@ -18,6 +20,7 @@ void __init init_sched_wrr_class(void) {
 		zalloc_cpumask_var_node(&per_cpu(local_cpu_mask, i), GFP_KERNEL, cpu_to_node(i));
 	}
 	current->wrr.weight = WRR_DEFAULT_WEIGHT;
+	prev_jiffies = jiffies;
 }
 
 
@@ -27,6 +30,7 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
 	// TODO!!!
 	INIT_LIST_HEAD(&(wrr_rq->run_list));
 	wrr_rq->weight_sum = 0;
+	spin_lock_init(&wrr_lb_lock);
 }
 
 // copy from rt.c
@@ -187,7 +191,7 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 		return;
 	if (p->policy != SCHED_WRR)
 		return;
-	if (--p->wrr.time_slice)
+	if (--wrr_se->time_slice > 0)
 		return;
 
 	// In rt.c set time_slice again, but we don't have to do this.
@@ -203,6 +207,7 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 	if (wrr_se->run_list.prev != wrr_se->run_list.next) {
 		requeue_task_wrr(rq, p, 0);
 		resched_curr(rq);
+		//set_tsk_need_resched(p);
 		return;
 	}
 }
@@ -314,7 +319,7 @@ static void update_curr_wrr(struct rq *rq)
  * raw_spin_lock(), raw_spin_unlock(), 
  * spin_lock_irqsave
  */
-void trigger_load_balance_wrr()
+static void __trigger_load_balance_wrr(void)
 {
 	int cpu;
 	struct rq *tmp_rq;
@@ -331,11 +336,6 @@ void trigger_load_balance_wrr()
 	struct task_struct *src_p = NULL;
 	struct task_struct *tmp_p;
 	
-	// prev_jiffies is not impolemented yet 
-	// TODO!!!
-	/* if(!time_after_eq(jiffies, prev_jiffies + 2 * HZ))
-		return;
-	*/
 	rcu_read_lock();
 	for_each_online_cpu(cpu) {
 		tmp_rq = cpu_rq(cpu);
@@ -381,7 +381,17 @@ void trigger_load_balance_wrr()
 	set_task_cpu(src_p, cpu_of(trg_rq));
 	activate_task(trg_rq, src_p, 0);
 	resched_curr(trg_rq);
+}
 
+void trigger_load_balance_wrr()
+{
+	unsigned long flags;
+	spin_lock_irqsave(&wrr_lb_lock, flags);
+	if(time_after_eq(jiffies, prev_jiffies + 2 * HZ)) {
+		__trigger_load_balance_wrr();
+		prev_jiffies = jiffies;
+	}
+	spin_unlock_irqrestore(&wrr_lb_lock, flags);
 }
 
 const struct sched_class wrr_sched_class = {

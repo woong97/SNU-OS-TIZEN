@@ -7,6 +7,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <sched.h>
 
 #define SET_SCHEDULER_SYS_NUM		156
@@ -43,14 +44,17 @@ int naive_factorization(long long number)
 	return EXIT_SUCCESS;
 }
 
-double child(long long num) {
-	double t_start = clock();
+long child(long long num) {
+	struct timeval t_start, t_end;
+	long spend_time;
+
+	gettimeofday(&t_start, NULL);
 	if (naive_factorization(num) < 0) {
 		printf("Child %d - Factorization failed,  errno = %d\n", getpid(), errno);
 		exit(EXIT_FAILURE);
 	}
-	double t_end = clock();
-	double spend_time = (double)(t_end - t_start)/CLOCKS_PER_SEC;
+	gettimeofday(&t_end, NULL);
+	spend_time = (t_end.tv_sec - t_start.tv_sec) * 1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
 	return spend_time;
 }
 
@@ -82,7 +86,7 @@ int main(int argc, char* argv[]) {
 				perror("Child %d setweight failed");
 				exit(EXIT_FAILURE);
 			}
-			double spend_time = child(atoll(argv[2]));
+			long spend_time = child(atoll(argv[2]));
 			printf("Child %d (weight=%d) -> Factorization takes %f\n", getpid(), weights[i], spend_time);
 			exit(EXIT_SUCCESS);
 		}

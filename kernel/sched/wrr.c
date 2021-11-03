@@ -24,7 +24,6 @@ void __init init_sched_wrr_class(void) {
 }
 
 
-// It is possible to unncessary!
 void init_wrr_rq(struct wrr_rq *wrr_rq)
 {
 	// TODO!!!
@@ -33,7 +32,6 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
 	spin_lock_init(&wrr_lb_lock);
 }
 
-// copy from rt.c
 static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
 {
 	return container_of(wrr_se, struct task_struct, wrr);
@@ -43,9 +41,6 @@ static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *wrr_rq = &(rq->wrr);
-	// Q1. Do we need lock???
-	// Q2. raw_spin_lock vs rcu_read_lock : which one is correct ?
-	
 	/* rcu_read_lock(); */
 	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 	list_add_tail(&wrr_se->run_list, &wrr_rq->run_list);
@@ -59,7 +54,6 @@ static void dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *wrr_rq = &(rq->wrr);
 
-	// Q1. Do we need lock??
 	/* rcu_read_lock(); */
 	list_del_init(&wrr_se->run_list);
 	wrr_rq->weight_sum -= wrr_se->weight;
@@ -71,24 +65,12 @@ static void requeue_task_wrr(struct rq *rq, struct task_struct *p, int head)
 {
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *wrr_rq = &(rq->wrr);
-	// Q1. Do wee need lock???
-	/* rcu_read_lock(); */
+	
 	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 	list_move_tail(&wrr_se->run_list, &wrr_rq->run_list);
-
-	/* need check!!!!!!!!  upper is right or comment is right
-	 * Maybe, just use list_move tail because it is round-robin!
-	 * if (head)
-	 * 	list_move(&wrr_se->run_list, &wrr_rq->run_list);
-	 * else
-	 * 	list_move_tail(&wrr_se->run_list, &wrr_rq->run_list);
-	 */
-
-	/* rcu_read_unlock(); */
 }
 static void yield_task_wrr(struct rq *rq)
 {
-	// copy from rt.c
 	requeue_task_wrr(rq, rq->curr, 0);
 }
 
@@ -122,17 +104,11 @@ static void put_prev_task_wrr(struct rq *rq, struct task_struct *p)
 }
 
 #ifdef CONFIG_SMP
-// very important function
-// Some creative idea can be adapted to here
-// For now, just move task to seleceted cpu which has the smallest weight sum
 static int select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int flags)
 {
 	struct rq *rq;
 	int min_weight_sum;
 	int target_cpu = -1;
-	/* For anything but wake ups, just return the task_cpu 
-	 * Let's test whethere under two lines are helpful or not 
-	 */
 	if (sd_flag != SD_BALANCE_WAKE && sd_flag != SD_BALANCE_FORK)
 		goto out;
 	rq = cpu_rq(cpu);
@@ -186,7 +162,6 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 {
 
 	struct sched_wrr_entity *wrr_se = &p->wrr;
-	// copy from rt.c
 	if (p == NULL)
 		return;
 	if (p->policy != SCHED_WRR)
@@ -194,39 +169,20 @@ static void task_tick_wrr(struct rq *rq, struct task_struct *p, int queued)
 	if (--wrr_se->time_slice > 0)
 		return;
 
-	// In rt.c set time_slice again, but we don't have to do this.
-	// Because we set time slice at requeue_task_rr
-	// Nedd to check my assertion is right
-	/* p->wrr.time_slilce = wrr_se->weight * WRR_TIMESLICE; */
-	
-	// copy from rt.c
-	// Q. some people use set_tsk_need_resched instead of resched_curr -> why??
-	// set_tsk_need_resched is called inside of resched_curr
-	// Key difference is set_preempt_need_resched() which is called in resched_curr
-	// I don't know the role of set_preempt_need_resched()
-	if (wrr_se->run_list.prev != wrr_se->run_list.next) {
-		requeue_task_wrr(rq, p, 0);
-		resched_curr(rq);
-		//set_tsk_need_resched(p);
-		return;
-	}
+	requeue_task_wrr(rq, p, 0);
+	resched_curr(rq);
+	return;
 }
 
-// Q. Why rt,c don't need task_fork?
 static void task_fork_wrr(struct task_struct *p)
 {
-	// copy from fair.c
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	if (p == NULL)
 		return;
-	// Q. other student didn't use lock. Should we need lock?
-	// fair.c use lock - should check this
-	// if we use rq_lock in this part like fair.c -> bug occured when we use fork at test.c
 	wrr_se->weight = p->parent->wrr.weight;
 	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 }
 
-// Q. Why don't we need task_dead ?
 static void task_dead_wrr(struct task_struct *p)
 {
 }
@@ -237,8 +193,6 @@ static void task_dead_wrr(struct task_struct *p)
  * I'm not sure this is correct. Need check!!!!!!!!!!! Help me!!!
  */
 
-//static void switched_from_wrr(struct rq *rq, struct task_struct *p) {
-//}
 
 
 static void switched_from_wrr(struct rq *rq, struct task_struct *p)
@@ -251,22 +205,15 @@ static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 	struct task_struct *hijacked_task;
 	struct sched_wrr_entity *hijacked_wrr_se;
 	bool resched = false;
-	// int dequee_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
 
-	// If some task already exsits in rq, just return
 	if (!task_on_rq_queued(p) || (rq->wrr.weight_sum > 0))
 		return;
-	// Pull other task in other wrr runqueue
-	// I'm not sure we need lock
 	rcu_read_lock();
 	for_each_online_cpu(cpu) {
 		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
 			continue;
 		tmp_rq = cpu_rq(cpu);
 		double_lock_balance(rq, tmp_rq);
-		// I want to find runqeue which has more than 1 task
-		// tmp_rq->curr->wrr.weight != tmp_rq->wrr.weight_sum : if current task's weight = runqueue's weight_sum, 
-		// It means that this runqueue has only one task
 		if ((tmp_rq->wrr.weight_sum > max_weight_sum) && (tmp_rq->curr->wrr.weight != tmp_rq->wrr.weight_sum)) {
 			max_weight_sum = tmp_rq->wrr.weight_sum;
 			hijacked_rq = tmp_rq;
@@ -313,12 +260,6 @@ static void update_curr_wrr(struct rq *rq)
 {
 }
 
-/* Need to research lock!!
- * In order to save jiffies time for load balance, we need load balance lock or save time at core.c
- * preempt_enable(), prempt_disable()
- * raw_spin_lock(), raw_spin_unlock(), 
- * spin_lock_irqsave
- */
 static void __trigger_load_balance_wrr(void)
 {
 	int cpu;

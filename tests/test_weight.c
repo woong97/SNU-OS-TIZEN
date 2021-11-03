@@ -7,6 +7,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <sched.h>
 
 #define SET_SCHEDULER_SYS_NUM		156
@@ -47,6 +48,8 @@ int main(int argc, char* argv[]) {
 	int ret;
 	struct sched_param param;
 	param.sched_priority = 0;
+	struct timeval t_start, t_end;
+	long spend_time;
 
 	if (argc < 3) {
 		printf("Insufficient input arguments [ ex) ./test (weight) (number) ]\n");
@@ -58,20 +61,21 @@ int main(int argc, char* argv[]) {
 		perror("set scheduler failed!");
 		exit(EXIT_FAILURE);
 	}
-	
+	printf("==set scheduler succeed!\n");
 	if (syscall(SCHED_SETWEIGHT_SYS_NUM, getpid(), weight) < 0) {
 		perror("setweight failed");
 		exit(EXIT_FAILURE);
 	}
+	printf("===set weight succeed!\n");
 	
-	double t_start = clock();
+	gettimeofday(&t_start, NULL);
 	if (naive_factorization(num) < 0) {
 		printf("[%d] - Factorization failed,  errno = %d\n", getpid(), errno);
 		exit(EXIT_FAILURE);
 	}
-	double t_end = clock();
-	double spend_time = (double)(t_end - t_start)/CLOCKS_PER_SEC;
+	gettimeofday(&t_end, NULL);
+	spend_time = (t_end.tv_sec - t_start.tv_sec) * 1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
 
-	printf("weight=%d -> Factorization takes %f\n", weight, spend_time);
+	printf("weight=%d -> Factorization takes %ld\n", weight, spend_time);
 	return EXIT_SUCCESS;
 }

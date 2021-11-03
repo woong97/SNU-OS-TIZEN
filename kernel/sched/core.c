@@ -758,7 +758,6 @@ static inline void enqueue_task(struct rq *rq, struct task_struct *p, int flags)
 
 	if (!(flags & ENQUEUE_RESTORE))
 		sched_info_queued(rq, p);
-
 	p->sched_class->enqueue_task(rq, p, flags);
 }
 
@@ -2203,8 +2202,8 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->rt.on_rq		= 0;
 	p->rt.on_list		= 0;
 	
-	p->wrr.time_slice	= WRR_DEFAULT_TIMESLICE;
-	p->wrr.weight		= WRR_DEFAULT_WEIGHT;
+	// p->wrr.time_slice	= WRR_DEFAULT_TIMESLICE;
+	// p->wrr.weight		= WRR_DEFAULT_WEIGHT;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
@@ -2375,13 +2374,7 @@ int sched_fork(unsigned long clone_flags, struct task_struct *p)
 			p->rt_priority = 0;
 		} else if (PRIO_TO_NICE(p->static_prio) < 0)
 			p->static_prio = NICE_TO_PRIO(0);
-		/*
-		else if (task_has_wrr_policy(p)) {
-			// TODO!!!
-			// I'm not sure we need this
-			p->static_prio = NICE_TO_PRIO(0);
-		} 
-		*/
+		
 		p->prio = p->normal_prio = __normal_prio(p);
 		set_load_weight(p);
 
@@ -3754,8 +3747,6 @@ void rt_mutex_setprio(struct task_struct *p, struct task_struct *pi_task)
 			queue_flag |= ENQUEUE_HEAD;
 		p->sched_class = &rt_sched_class;
 	} else if (p->policy == SCHED_WRR) {
-		if (dl_prio(oldprio))
-			p->dl.dl_boosted = 0;
 		p->sched_class = &wrr_sched_class;
 	} else {
 		if (dl_prio(oldprio))
@@ -3763,10 +3754,9 @@ void rt_mutex_setprio(struct task_struct *p, struct task_struct *pi_task)
 		if (rt_prio(oldprio))
 			p->rt.timeout = 0;
 		p->sched_class = &fair_sched_class;
-	}
+	} 
 
 	p->prio = prio;
-
 	if (queued)
 		enqueue_task(rq, p, queue_flag);
 	if (running)
@@ -3998,7 +3988,7 @@ static void __setscheduler(struct rq *rq, struct task_struct *p,
 	
 	if (p->policy == SCHED_WRR)
 		p->sched_class = &wrr_sched_class;
-	if (dl_prio(p->prio))
+	else if (dl_prio(p->prio))
 		p->sched_class = &dl_sched_class;
 	else if (rt_prio(p->prio))
 		p->sched_class = &rt_sched_class;
@@ -4046,78 +4036,76 @@ recheck:
 		policy = oldpolicy = p->policy;
 	} else {
 		reset_on_fork = !!(attr->sched_flags & SCHED_FLAG_RESET_ON_FORK);
-
 		if (!valid_policy(policy))
 			return -EINVAL;
 	}
-
 	if (attr->sched_flags &
 		~(SCHED_FLAG_RESET_ON_FORK | SCHED_FLAG_RECLAIM))
 		return -EINVAL;
-	
-	/*
-	 * Valid priorities for SCHED_FIFO and SCHED_RR are
-	 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
-	 * SCHED_BATCH and SCHED_IDLE is 0.
-	 */
-	if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
-	    (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
-		return -EINVAL;
-	if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
-	    (rt_policy(policy) != (attr->sched_priority != 0)))
-		return -EINVAL;
-
-	/*
-	 * Allow unprivileged RT tasks to decrease priority:
-	 */
-	if (user && !capable(CAP_SYS_NICE)) {
-		if (fair_policy(policy)) {
-			if (attr->sched_nice < task_nice(p) &&
-			    !can_nice(p, attr->sched_nice))
-				return -EPERM;
-		}
-
-		if (rt_policy(policy)) {
-			unsigned long rlim_rtprio =
-					task_rlimit(p, RLIMIT_RTPRIO);
-
-			/* Can't set/change the rt policy: */
-			if (policy != p->policy && !rlim_rtprio)
-				return -EPERM;
-
-			/* Can't increase priority: */
-			if (attr->sched_priority > p->rt_priority &&
-			    attr->sched_priority > rlim_rtprio)
-				return -EPERM;
-		}
-
-		 /*
-		  * Can't set/change SCHED_DEADLINE policy at all for now
-		  * (safest behavior); in the future we would like to allow
-		  * unprivileged DL tasks to increase their relative deadline
-		  * or reduce their runtime (both ways reducing utilization)
-		  */
-		if (dl_policy(policy))
-			return -EPERM;
+	if (policy != SCHED_WRR) {
+		/*
+		 * Valid priorities for SCHED_FIFO and SCHED_RR are
+		 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
+		 * SCHED_BATCH and SCHED_IDLE is 0.
+		 */
+		if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
+		    (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
+			return -EINVAL;
+		if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
+		    (rt_policy(policy) != (attr->sched_priority != 0)))
+			return -EINVAL;
 
 		/*
-		 * Treat SCHED_IDLE as nice 20. Only allow a switch to
-		 * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
+		 * Allow unprivileged RT tasks to decrease priority:
 		 */
-		if (idle_policy(p->policy) && !idle_policy(policy)) {
-			if (!can_nice(p, task_nice(p)))
+		if (user && !capable(CAP_SYS_NICE)) {
+			if (fair_policy(policy)) {
+				if (attr->sched_nice < task_nice(p) &&
+				    !can_nice(p, attr->sched_nice))
+					return -EPERM;
+			}
+
+			if (rt_policy(policy)) {
+				unsigned long rlim_rtprio =
+						task_rlimit(p, RLIMIT_RTPRIO);
+
+				/* Can't set/change the rt policy: */
+				if (policy != p->policy && !rlim_rtprio)
+					return -EPERM;
+
+				/* Can't increase priority: */
+				if (attr->sched_priority > p->rt_priority &&
+				    attr->sched_priority > rlim_rtprio)
+					return -EPERM;
+			}
+
+			 /*
+			  * Can't set/change SCHED_DEADLINE policy at all for now
+			  * (safest behavior); in the future we would like to allow
+			  * unprivileged DL tasks to increase their relative deadline
+			  * or reduce their runtime (both ways reducing utilization)
+			  */
+			if (dl_policy(policy))
+				return -EPERM;
+
+			/*
+			 * Treat SCHED_IDLE as nice 20. Only allow a switch to
+			 * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
+			 */
+			if (idle_policy(p->policy) && !idle_policy(policy)) {
+				if (!can_nice(p, task_nice(p)))
+					return -EPERM;
+			}
+
+			/* Can't change other user's priorities: */
+			if (!check_same_owner(p))
+				return -EPERM;
+
+			/* Normal users shall not reset the sched_reset_on_fork flag: */
+			if (p->sched_reset_on_fork && !reset_on_fork)
 				return -EPERM;
 		}
-
-		/* Can't change other user's priorities: */
-		if (!check_same_owner(p))
-			return -EPERM;
-
-		/* Normal users shall not reset the sched_reset_on_fork flag: */
-		if (p->sched_reset_on_fork && !reset_on_fork)
-			return -EPERM;
 	}
-
 	if (user) {
 		retval = security_task_setscheduler(p);
 		if (retval)
@@ -4133,7 +4121,6 @@ recheck:
 	 */
 	rq = task_rq_lock(p, &rf);
 	update_rq_clock(rq);
-
 	/*
 	 * Changing the policy of the stop threads its a very bad idea:
 	 */
@@ -4161,7 +4148,6 @@ recheck:
 		return 0;
 	}
 change:
-
 	if (user) {
 #ifdef CONFIG_RT_GROUP_SCHED
 		/*
@@ -4192,7 +4178,6 @@ change:
 		}
 #endif
 	}
-
 	/* Re-check policy now with rq lock held: */
 	if (unlikely(oldpolicy != -1 && oldpolicy != p->policy)) {
 		policy = oldpolicy = -1;
@@ -4212,7 +4197,6 @@ change:
 
 	p->sched_reset_on_fork = reset_on_fork;
 	oldprio = p->prio;
-
 	if (pi) {
 		/*
 		 * Take priority boosted tasks into account. If the new
@@ -4235,7 +4219,6 @@ change:
 
 	prev_class = p->sched_class;
 	__setscheduler(rq, p, attr, pi);
-
 	if (queued) {
 		/*
 		 * We enqueue to tail when the priority of a task is
@@ -4243,7 +4226,6 @@ change:
 		 */
 		if (oldprio < p->prio)
 			queue_flags |= ENQUEUE_HEAD;
-
 		enqueue_task(rq, p, queue_flags);
 	}
 	if (running)
@@ -4273,7 +4255,6 @@ static int _sched_setscheduler(struct task_struct *p, int policy,
 		.sched_priority = param->sched_priority,
 		.sched_nice	= PRIO_TO_NICE(p->static_prio),
 	};
-
 	/* Fixup the legacy SCHED_RESET_ON_FORK hack. */
 	if ((policy != SETPARAM_POLICY) && (policy & SCHED_RESET_ON_FORK)) {
 		attr.sched_flags |= SCHED_FLAG_RESET_ON_FORK;
@@ -5770,7 +5751,7 @@ void __init sched_init_smp(void)
 	free_cpumask_var(non_isolated_cpus);
 
 	init_sched_rt_class();
-	init_sched_wrr_class();
+	//init_sched_wrr_class();
 	init_sched_dl_class();
 
 	sched_smp_initialized = true;

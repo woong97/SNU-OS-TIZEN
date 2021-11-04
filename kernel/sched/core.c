@@ -2203,8 +2203,6 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
 	p->rt.on_rq		= 0;
 	p->rt.on_list		= 0;
 	
-	// p->wrr.time_slice	= WRR_DEFAULT_TIMESLICE;
-	// p->wrr.weight		= WRR_DEFAULT_WEIGHT;
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	INIT_HLIST_HEAD(&p->preempt_notifiers);
 #endif
@@ -3044,7 +3042,7 @@ void scheduler_tick(void)
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
 	trigger_load_balance(rq);
-	if(curr->policy == SCHED_WRR)
+	if (curr->policy == SCHED_WRR)
 		trigger_load_balance_wrr();
 #endif
 	rq_last_tick_reset(rq);
@@ -4016,21 +4014,23 @@ static bool check_same_owner(struct task_struct *p)
 	return match;
 }
 
-static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
+static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_struct *p)
 {
 	int dest_cpu;
 	int cpu;
 	struct rq *tmp_rq;
-	int min_weight_sum = 100000;
 	struct cpumask mask;
-
+	//const struct cpumask *no_use_cpu_mask = get_cpu_mask(WRR_EMPTY_CPU);
+	
+	struct rq_flags rf;
+	int min_weight_sum = 100000;
 	rcu_read_lock();
 	for_each_online_cpu(cpu) {
-		printk("cpu check!!! %d\n", cpu);
 		if (cpu == WRR_EMPTY_CPU)
 			continue;
 		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
 			continue;
+		cpumask_set_cpu(cpu, &mask);
 		tmp_rq = cpu_rq(cpu);
 		if (tmp_rq->wrr.weight_sum < min_weight_sum) {
 			min_weight_sum = tmp_rq->wrr.weight_sum;
@@ -4038,36 +4038,33 @@ static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_str
 		}
 	}
 	rcu_read_unlock();
-	printk("===dest cpu!! %d\n", dest_cpu);
 	if (dest_cpu == WRR_EMPTY_CPU) {
-		printk("should not be occured!!!\n");
 		return;
 	}
+
+	
+	sched_setaffinity(p->pid, &mask);
 	
 	if (cpu_of(rq) == WRR_EMPTY_CPU) {
-		printk("===let's do itn\n");
-		// rq = task_rq_lock(p, rf);
-		// update_rq_clock(rq);
+		update_rq_clock(rq);
 		if (task_running(rq, p) || p->state ==TASK_WAKING) {
 			struct migration_arg arg = {p, dest_cpu};
-			// task_rq_unlock(rq, p, rf);
-			printk("===let's top one cpu\n");
+			//task_rq_unlock(rq, p, &rf);
 			stop_one_cpu(cpu_of(rq), migration_cpu_stop, &arg);
 			tlb_migrate_finish(p->mm);
+			return rq;
 		} else if (task_on_rq_queued(p)) {
-			printk("==let's task on rq\n");
-			rq = move_queued_task(rq, rf, p, dest_cpu);
+			rq = move_queued_task(rq, &rf, p, dest_cpu);
 		}
-		printk("===let's task rq unlock\n");
-		// task_rq_unlock(rq, p, rf);
-		cpumask_set_cpu(1, &mask);
-		cpumask_set_cpu(2, &mask);
-		cpumask_set_cpu(3, &mask);
-		sched_setaffinity(p->pid, &mask);
+		
+		
+		// task_rq_unlock(rq, p, &rf);
+		// cpumask_set_cpu(1, &mask);
+		// cpumask_set_cpu(2, &mask);
+		// cpumask_set_cpu(3, &mask);
+		// sched_setaffinity(p->pid, &mask);
 	}
-	
-	
-	printk("hey!!!!\n");
+
 	return rq;
 
 }
@@ -4087,10 +4084,9 @@ static int __sched_setscheduler(struct task_struct *p,
 	int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
 	struct rq *rq;
 	struct cpumask mask;
-	
+
 	if(attr->sched_policy == SCHED_WRR) {
-		printk("==============================migration ocured\n");
-		rq = migrate_task_to_wrr_existed_cpu(task_rq(p), p, &rf);
+		rq = migrate_task_to_wrr_existed_cpu(task_rq(p), p);
 	}
 
 
@@ -4291,50 +4287,22 @@ change:
 		 */
 		if (oldprio < p->prio)
 			queue_flags |= ENQUEUE_HEAD;
-		if (p->policy == SCHED_WRR) {
-			printk("let's eqnque!\n");
-		}
 		enqueue_task(rq, p, queue_flags);
 	}
 	if (running)
 		set_curr_task(rq, p);
-
 	check_class_changed(rq, p, prev_class, oldprio);
 
 	/* Avoid rq from going away on us: */
 	preempt_disable();
 	task_rq_unlock(rq, p, &rf);
-
+	
 	if (pi)
 		rt_mutex_adjust_pi(p);
 
 	/* Run balance callbacks after we've adjusted the PI chain: */
 	balance_callback(rq);
 
-	/*
-	if(cpu_of(rq) == WRR_EMPTY_CPU && p->policy == SCHED_WRR) {
-		rq = migrate_task_to_wrr_existed_cpu(rq, p, &rf);
-		sched_setaffinity(p->pid, &mask);
-	}*/
-/*
-	if(rq->cpu==0 && p->policy==7){
-		rcu_read_lock();
-		if (task_running(rq, p) || p->state == TASK_WAKING) {
-			struct migration_arg arg = { p, 1 };
-			printk("===hi before stop cpu\n");
-			stop_one_cpu(cpu_of(rq), migration_cpu_stop, &arg);
-			printk("===hi after stop cpu\n");
-			tlb_migrate_finish(p->mm);
-		} else if (task_on_rq_queued(p)) {
-			rq = move_queued_task(rq, &rf, p, 1);
-		}
-		cpumask_set_cpu(1, &mask);
-		cpumask_set_cpu(2, &mask);
-		cpumask_set_cpu(3, &mask);
-		sched_setaffinity(p->pid, &mask);
-		rcu_read_unlock();
-		
-	}*/
 	preempt_enable();
 
 	return 0;
@@ -6859,7 +6827,7 @@ SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight) {
 	struct rq *rq;
 	kuid_t root_uid;
 	int retval;
-	printk("===try set weihgt %d\n", weight);	
+	// printk("[%d] try set weihgt %d\n", pid, weight);	
 	if (weight < WRR_MIN_WEIGHT || weight > WRR_MAX_WEIGHT)
 		return -EINVAL;
 	if (pid < 0)
@@ -6893,7 +6861,6 @@ SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight) {
 		}
 	}
 	rcu_read_unlock();
-	printk("===set weight: %d\n", weight);
 	return retval;
 }
 

@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
 	}
 	int nproc = atoi(argv[1]);
 	pid_t pid[nproc];
-	nproc = 5;
+	nproc = 6;
 	int weights[nproc];
 	srand(time(NULL));
 	/*for (int i = 0; i < nproc; i ++) {
@@ -78,23 +78,26 @@ int main(int argc, char* argv[]) {
 		printf("===weight: %d\n", weights[i]);
 	}*/
 	weights[0] = 2;
-	weights[1] = 7;
+	weights[1] = 1;
 	weights[2] = 20;
-	weights[3] = 6;
+	weights[3] = 4;
 	weights[4] = 11;
+	weights[5] = 5;
 	for (int i = 0; i < nproc; i++) {
 		pid[i] = fork();
 		if (pid[i] == 0) {
+			printf("[%d] child start!!!!!!!!!\n", getpid());
 			if (syscall(SET_SCHEDULER_SYS_NUM, getpid(), SCHED_WRR, &param)) {
 				perror("set scheduler failed!");
 				exit(EXIT_FAILURE);
 			}
+			printf("[%d] set schedule finish\n", getpid());
 			if (syscall(SCHED_SETWEIGHT_SYS_NUM, getpid(), weights[i]) < 0) {
-				perror("Child %d setweight failed");
+				perror("Child setweight failed");
 				exit(EXIT_FAILURE);
 			}
 			long spend_time = child(atoll(argv[2]));
-			printf("Child %d (weight=%d) -> Factorization takes %ld\n", getpid(), weights[i], spend_time);
+			printf("[%d] Child (weight=%d) -> Factorization takes %ld\n", getpid(), weights[i], spend_time);
 			exit(EXIT_SUCCESS);
 		}
 	}
@@ -103,9 +106,9 @@ int main(int argc, char* argv[]) {
 		int status;
 		waitpid(pid[i], &status, 0); 
 		if WIFEXITED(status) {
-			printf("Child %d terminated normally\n", pid[i]);
+			printf("[%d] Child terminated normally\n", pid[i]);
 		} else {
-			printf("Child %d terminated abnormally\n", pid[i]);
+			printf("[%d] Child terminated abnormally\n", pid[i]);
 			return EXIT_FAILURE;
 		}
 	}

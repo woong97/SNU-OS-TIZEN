@@ -57,16 +57,15 @@ int main(int argc, char* argv[]) {
 	}
 	int weight = atoi(argv[1]);
 	int num = atoi(argv[2]);
+
 	if (syscall(SET_SCHEDULER_SYS_NUM, getpid(), SCHED_WRR, &param)) {
 		perror("set scheduler failed!");
 		exit(EXIT_FAILURE);
 	}
-	printf("==set scheduler succeed!\n");
 	if (syscall(SCHED_SETWEIGHT_SYS_NUM, getpid(), weight) < 0) {
 		perror("setweight failed");
 		exit(EXIT_FAILURE);
 	}
-	printf("===set weight succeed!\n");
 	
 	gettimeofday(&t_start, NULL);
 	if (naive_factorization(num) < 0) {
@@ -76,6 +75,6 @@ int main(int argc, char* argv[]) {
 	gettimeofday(&t_end, NULL);
 	spend_time = (t_end.tv_sec - t_start.tv_sec) * 1000 + (t_end.tv_usec - t_start.tv_usec)/1000.0;
 
-	printf("weight=%d -> Factorization takes %ld\n", weight, spend_time);
+	printf("weight = %d -> Factorization takes %ldms\n", weight, spend_time);
 	return EXIT_SUCCESS;
 }

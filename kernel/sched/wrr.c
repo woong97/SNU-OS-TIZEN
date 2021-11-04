@@ -16,26 +16,6 @@ int sched_wrr_default_weight = WRR_DEFAULT_WEIGHT;
 static DEFINE_PER_CPU(cpumask_var_t, local_cpu_mask);
 
 
-void print_cpus_weight(void)
-{
-	int cpu;
-	struct rq *rq;
-	int i=0;
-	int weights[8];
-	
-	rcu_read_lock();
-	for_each_online_cpu(cpu) {
-		rq = cpu_rq(cpu);
-		weights[cpu] = rq->wrr.weight_sum;
-	}
-	rcu_read_unlock();
-
-	for(i=0; i<4; i++) {
-		printk(KERN_ALERT"cpu %d's wrr weight is %d\n",i, weights[i]);
-	}				    
-}
-
-
 void __init init_sched_wrr_class(void) {
 	unsigned int i;
 
@@ -64,14 +44,13 @@ static void enqueue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *wrr_rq = &(rq->wrr);
-	/* rcu_read_lock(); */
-	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
+	rcu_read_lock();
 	list_add_tail(&wrr_se->run_list, &wrr_rq->run_list);
-	printk("===cpu weight:%d\n", wrr_se->weight);
+	wrr_se->time_slice = wrr_se->weight * WRR_TIMESLICE;
 	wrr_rq->weight_sum += wrr_se->weight;
+	
 	add_nr_running(rq, 1);
-	//iprint_cpus_weight();
-	/* rcu_read_unlock(); */
+	rcu_read_unlock();
 }
 
 static void dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
@@ -79,11 +58,9 @@ static void dequeue_task_wrr(struct rq *rq, struct task_struct *p, int flags)
 	struct sched_wrr_entity *wrr_se = &p->wrr;
 	struct wrr_rq *wrr_rq = &(rq->wrr);
 
-	/* rcu_read_lock(); */
 	list_del_init(&wrr_se->run_list);
 	wrr_rq->weight_sum -= wrr_se->weight;
 	sub_nr_running(rq, 1);
-	/* rcu_read_unlock(); */
 }
 
 static void requeue_task_wrr(struct rq *rq, struct task_struct *p, int head)
@@ -157,7 +134,6 @@ static int select_task_rq_wrr(struct task_struct *p, int cpu, int sd_flag, int f
 		cpu = target_cpu;
 	rcu_read_unlock();
 out:
-	//printk("====selcedte cpu: %d\n", cpu);
 	return cpu;
 }
 
@@ -217,15 +193,9 @@ static void task_dead_wrr(struct task_struct *p)
 
 /* Maybe this is called when task change from wrr scheduler to fair scheduler
  * If task was last of qeuee, pull other wrr task in other runqueu
- * Other people doesn't implement this function(why?...)
- * I'm not sure this is correct. Need check!!!!!!!!!!! Help me!!!
  */
-
-
-
 static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 {
-	//printk("===switched from wrr\n");
 	int cpu;
 	int hijacked_cpu;
 	int max_weight_sum = 0;
@@ -307,8 +277,7 @@ static void __trigger_load_balance_wrr(void)
 	struct sched_wrr_entity *tmp_wrr_se;
 	struct task_struct *src_p = NULL;
 	struct task_struct *tmp_p;
-	printk("======start\n");
-	print_cpus_weight();
+	
 	rcu_read_lock();
 	for_each_online_cpu(cpu) {
 		if (cpu == WRR_EMPTY_CPU)
@@ -336,16 +305,11 @@ static void __trigger_load_balance_wrr(void)
 	rcu_read_unlock();
 
 	if (src_rq == NULL || trg_rq == NULL) {
-		//printk("both null\n");
 		return;
 	}
 	if (src_rq == trg_rq) {
-		//printk("both equal\n");
 		return;
 	}
-	printk("===before load balance\n");
-	print_cpus_weight();
-	//
 	double_rq_lock(src_rq, trg_rq);
 	list_for_each_entry(tmp_wrr_se, &(src_rq->wrr.run_list), run_list) {
 		tmp_p = wrr_task_of(tmp_wrr_se);
@@ -366,9 +330,6 @@ static void __trigger_load_balance_wrr(void)
 	set_task_cpu(src_p, cpu_of(trg_rq));
 	activate_task(trg_rq, src_p, 0);
 	resched_curr(trg_rq);
-	printk("===after load balance\n");
-	print_cpus_weight();	
-
 }
 
 void trigger_load_balance_wrr()

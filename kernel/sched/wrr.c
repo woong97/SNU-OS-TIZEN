@@ -34,6 +34,16 @@ void init_wrr_rq(struct wrr_rq *wrr_rq)
 	wrr_rq->weight_sum = 0;
 	spin_lock_init(&wrr_lb_lock);
 }
+#ifdef CONFIG_SCHED_DEBUG
+void print_wrr_stats(struct seq_file *m, int cpu)
+{
+	struct rq *rq = cpu_rq(cpu);
+	struct wrr_rq *wrr_rq = &rq->wrr;
+	rcu_read_lock();
+	print_wrr_rq(m, cpu, wrr_rq);
+	rcu_read_unlock();
+}
+#endif
 
 static inline struct task_struct *wrr_task_of(struct sched_wrr_entity *wrr_se)
 {

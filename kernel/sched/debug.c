@@ -618,6 +618,23 @@ void print_rt_rq(struct seq_file *m, int cpu, struct rt_rq *rt_rq)
 void print_wrr_rq(struct seq_file *m, int cpu, struct wrr_rq *wrr_rq)
 {
 	// TODO!!!
+	printk("\n");
+	printk("====== wrr runqueue debug log - cpu = %d\n", cpu);
+#define PU(x) \
+	SEQ_printf(m, "  .%-30s: %lu\n", #x, (unsigned long)(wrr_rq->x))
+	PU(weight_sum);
+	
+	struct sched_wrr_entity *tmp_wrr_se;
+	struct task_struct *tmp_p;
+	int tmp_weight;
+	char *log = "weight";
+	list_for_each_entry(tmp_wrr_se, &(wrr_rq->run_list), run_list) {
+		tmp_p = container_of(tmp_wrr_se, struct task_struct, wrr);
+		tmp_weight = tmp_p->wrr.weight;
+		SEQ_printf(m, "  .cpu %d - %-30s: %d\n", cpu, log, tmp_weight);
+	}
+	printk("\n");
+
 }
 
 void print_dl_rq(struct seq_file *m, int cpu, struct dl_rq *dl_rq)
@@ -710,7 +727,7 @@ do {									\
 	print_cfs_stats(m, cpu);
 	print_rt_stats(m, cpu);
 	print_dl_stats(m, cpu);
-
+	print_wrr_stats(m, cpu);
 	print_rq(m, rq, cpu);
 	spin_unlock_irqrestore(&sched_debug_lock, flags);
 	SEQ_printf(m, "\n");

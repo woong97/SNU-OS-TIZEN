@@ -39,6 +39,7 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 #include <linux/sched/wrr.h>
+#define	WRR_EMPTY_CPU	0
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
@@ -3043,7 +3044,8 @@ void scheduler_tick(void)
 #ifdef CONFIG_SMP
 	rq->idle_balance = idle_cpu(cpu);
 	trigger_load_balance(rq);
-	trigger_load_balance_wrr();
+	if(curr->policy == SCHED_WRR)
+		trigger_load_balance_wrr();
 #endif
 	rq_last_tick_reset(rq);
 }
@@ -3747,6 +3749,8 @@ void rt_mutex_setprio(struct task_struct *p, struct task_struct *pi_task)
 			queue_flag |= ENQUEUE_HEAD;
 		p->sched_class = &rt_sched_class;
 	} else if (p->policy == SCHED_WRR) {
+		if (dl_prio(oldprio))
+			p->dl.dl_boosted = 0;
 		p->sched_class = &wrr_sched_class;
 	} else {
 		if (dl_prio(oldprio))
@@ -4012,6 +4016,63 @@ static bool check_same_owner(struct task_struct *p)
 	return match;
 }
 
+static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_struct *p, struct rq_flags *rf)
+{
+	int dest_cpu;
+	int cpu;
+	struct rq *tmp_rq;
+	int min_weight_sum = 100000;
+	struct cpumask mask;
+
+	rcu_read_lock();
+	for_each_online_cpu(cpu) {
+		printk("cpu check!!! %d\n", cpu);
+		if (cpu == WRR_EMPTY_CPU)
+			continue;
+		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
+			continue;
+		tmp_rq = cpu_rq(cpu);
+		if (tmp_rq->wrr.weight_sum < min_weight_sum) {
+			min_weight_sum = tmp_rq->wrr.weight_sum;
+			dest_cpu = cpu;
+		}
+	}
+	rcu_read_unlock();
+	printk("===dest cpu!! %d\n", dest_cpu);
+	if (dest_cpu == WRR_EMPTY_CPU) {
+		printk("should not be occured!!!\n");
+		return;
+	}
+	
+	if (cpu_of(rq) == WRR_EMPTY_CPU) {
+		printk("===let's do itn\n");
+		// rq = task_rq_lock(p, rf);
+		// update_rq_clock(rq);
+		if (task_running(rq, p) || p->state ==TASK_WAKING) {
+			struct migration_arg arg = {p, dest_cpu};
+			// task_rq_unlock(rq, p, rf);
+			printk("===let's top one cpu\n");
+			stop_one_cpu(cpu_of(rq), migration_cpu_stop, &arg);
+			tlb_migrate_finish(p->mm);
+		} else if (task_on_rq_queued(p)) {
+			printk("==let's task on rq\n");
+			rq = move_queued_task(rq, rf, p, dest_cpu);
+		}
+		printk("===let's task rq unlock\n");
+		// task_rq_unlock(rq, p, rf);
+		cpumask_set_cpu(1, &mask);
+		cpumask_set_cpu(2, &mask);
+		cpumask_set_cpu(3, &mask);
+		sched_setaffinity(p->pid, &mask);
+	}
+	
+	
+	printk("hey!!!!\n");
+	return rq;
+
+}
+
+
 static int __sched_setscheduler(struct task_struct *p,
 				const struct sched_attr *attr,
 				bool user, bool pi)
@@ -4025,6 +4086,12 @@ static int __sched_setscheduler(struct task_struct *p,
 	int reset_on_fork;
 	int queue_flags = DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
 	struct rq *rq;
+	struct cpumask mask;
+	
+	if(attr->sched_policy == SCHED_WRR) {
+		printk("==============================migration ocured\n");
+		rq = migrate_task_to_wrr_existed_cpu(task_rq(p), p, &rf);
+	}
 
 
 	/* The pi code expects interrupts enabled */
@@ -4042,70 +4109,70 @@ recheck:
 	if (attr->sched_flags &
 		~(SCHED_FLAG_RESET_ON_FORK | SCHED_FLAG_RECLAIM))
 		return -EINVAL;
-	if (policy != SCHED_WRR) {
-		/*
-		 * Valid priorities for SCHED_FIFO and SCHED_RR are
-		 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
-		 * SCHED_BATCH and SCHED_IDLE is 0.
-		 */
-		if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
-		    (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
-			return -EINVAL;
-		if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
-		    (rt_policy(policy) != (attr->sched_priority != 0)))
-			return -EINVAL;
 
-		/*
-		 * Allow unprivileged RT tasks to decrease priority:
-		 */
-		if (user && !capable(CAP_SYS_NICE)) {
-			if (fair_policy(policy)) {
-				if (attr->sched_nice < task_nice(p) &&
-				    !can_nice(p, attr->sched_nice))
-					return -EPERM;
-			}
+	/*
+	 * Valid priorities for SCHED_FIFO and SCHED_RR are
+	 * 1..MAX_USER_RT_PRIO-1, valid priority for SCHED_NORMAL,
+	 * SCHED_BATCH and SCHED_IDLE is 0.
+	 */
+	if ((p->mm && attr->sched_priority > MAX_USER_RT_PRIO-1) ||
+	    (!p->mm && attr->sched_priority > MAX_RT_PRIO-1))
+		return -EINVAL;
+	if ((dl_policy(policy) && !__checkparam_dl(attr)) ||
+	    (rt_policy(policy) != (attr->sched_priority != 0)))
+		return -EINVAL;
 
-			if (rt_policy(policy)) {
-				unsigned long rlim_rtprio =
-						task_rlimit(p, RLIMIT_RTPRIO);
-
-				/* Can't set/change the rt policy: */
-				if (policy != p->policy && !rlim_rtprio)
-					return -EPERM;
-
-				/* Can't increase priority: */
-				if (attr->sched_priority > p->rt_priority &&
-				    attr->sched_priority > rlim_rtprio)
-					return -EPERM;
-			}
-
-			 /*
-			  * Can't set/change SCHED_DEADLINE policy at all for now
-			  * (safest behavior); in the future we would like to allow
-			  * unprivileged DL tasks to increase their relative deadline
-			  * or reduce their runtime (both ways reducing utilization)
-			  */
-			if (dl_policy(policy))
-				return -EPERM;
-
-			/*
-			 * Treat SCHED_IDLE as nice 20. Only allow a switch to
-			 * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
-			 */
-			if (idle_policy(p->policy) && !idle_policy(policy)) {
-				if (!can_nice(p, task_nice(p)))
-					return -EPERM;
-			}
-
-			/* Can't change other user's priorities: */
-			if (!check_same_owner(p))
-				return -EPERM;
-
-			/* Normal users shall not reset the sched_reset_on_fork flag: */
-			if (p->sched_reset_on_fork && !reset_on_fork)
+	/*
+	 * Allow unprivileged RT tasks to decrease priority:
+	 */
+	if (user && !capable(CAP_SYS_NICE)) {
+		if (fair_policy(policy)) {
+			if (attr->sched_nice < task_nice(p) &&
+			    !can_nice(p, attr->sched_nice))
 				return -EPERM;
 		}
+
+		if (rt_policy(policy)) {
+			unsigned long rlim_rtprio =
+					task_rlimit(p, RLIMIT_RTPRIO);
+
+			/* Can't set/change the rt policy: */
+			if (policy != p->policy && !rlim_rtprio)
+				return -EPERM;
+
+			/* Can't increase priority: */
+			if (attr->sched_priority > p->rt_priority &&
+			    attr->sched_priority > rlim_rtprio)
+				return -EPERM;
+		}
+
+		 /*
+		  * Can't set/change SCHED_DEADLINE policy at all for now
+		  * (safest behavior); in the future we would like to allow
+		  * unprivileged DL tasks to increase their relative deadline
+		  * or reduce their runtime (both ways reducing utilization)
+		  */
+		if (dl_policy(policy))
+			return -EPERM;
+
+		/*
+		 * Treat SCHED_IDLE as nice 20. Only allow a switch to
+		 * SCHED_NORMAL if the RLIMIT_NICE would normally permit it.
+		 */
+		if (idle_policy(p->policy) && !idle_policy(policy)) {
+			if (!can_nice(p, task_nice(p)))
+				return -EPERM;
+		}
+
+		/* Can't change other user's priorities: */
+		if (!check_same_owner(p))
+			return -EPERM;
+
+		/* Normal users shall not reset the sched_reset_on_fork flag: */
+		if (p->sched_reset_on_fork && !reset_on_fork)
+			return -EPERM;
 	}
+
 	if (user) {
 		retval = security_task_setscheduler(p);
 		if (retval)
@@ -4137,8 +4204,6 @@ recheck:
 		if (fair_policy(policy) && attr->sched_nice != task_nice(p))
 			goto change;
 		if (rt_policy(policy) && attr->sched_priority != p->rt_priority)
-			goto change;
-		if (wrr_policy(policy))
 			goto change;
 		if (dl_policy(policy) && dl_param_changed(p, attr))
 			goto change;
@@ -4226,6 +4291,9 @@ change:
 		 */
 		if (oldprio < p->prio)
 			queue_flags |= ENQUEUE_HEAD;
+		if (p->policy == SCHED_WRR) {
+			printk("let's eqnque!\n");
+		}
 		enqueue_task(rq, p, queue_flags);
 	}
 	if (running)
@@ -4242,6 +4310,31 @@ change:
 
 	/* Run balance callbacks after we've adjusted the PI chain: */
 	balance_callback(rq);
+
+	/*
+	if(cpu_of(rq) == WRR_EMPTY_CPU && p->policy == SCHED_WRR) {
+		rq = migrate_task_to_wrr_existed_cpu(rq, p, &rf);
+		sched_setaffinity(p->pid, &mask);
+	}*/
+/*
+	if(rq->cpu==0 && p->policy==7){
+		rcu_read_lock();
+		if (task_running(rq, p) || p->state == TASK_WAKING) {
+			struct migration_arg arg = { p, 1 };
+			printk("===hi before stop cpu\n");
+			stop_one_cpu(cpu_of(rq), migration_cpu_stop, &arg);
+			printk("===hi after stop cpu\n");
+			tlb_migrate_finish(p->mm);
+		} else if (task_on_rq_queued(p)) {
+			rq = move_queued_task(rq, &rf, p, 1);
+		}
+		cpumask_set_cpu(1, &mask);
+		cpumask_set_cpu(2, &mask);
+		cpumask_set_cpu(3, &mask);
+		sched_setaffinity(p->pid, &mask);
+		rcu_read_unlock();
+		
+	}*/
 	preempt_enable();
 
 	return 0;
@@ -6766,7 +6859,7 @@ SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight) {
 	struct rq *rq;
 	kuid_t root_uid;
 	int retval;
-	
+	printk("===try set weihgt %d\n", weight);	
 	if (weight < WRR_MIN_WEIGHT || weight > WRR_MAX_WEIGHT)
 		return -EINVAL;
 	if (pid < 0)
@@ -6800,6 +6893,7 @@ SYSCALL_DEFINE2(sched_setweight, pid_t, pid, int, weight) {
 		}
 	}
 	rcu_read_unlock();
+	printk("===set weight: %d\n", weight);
 	return retval;
 }
 

@@ -74,7 +74,6 @@ int main(int argc, char* argv[]) {
 	srand(time(NULL));
 	for (int i = 0; i < nproc; i ++) {
 		weights[i] = rand() % MAX_WEIGHT + 1;
-		printf("===weight: %d\n", weights[i]);
 	}
 	
 	for (int i = 0; i < nproc; i++) {

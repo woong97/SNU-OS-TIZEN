@@ -4014,14 +4014,14 @@ static bool check_same_owner(struct task_struct *p)
 	return match;
 }
 
-static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_struct *p)
+void migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_struct *p)
 {
 	int dest_cpu;
 	int cpu;
 	struct rq *tmp_rq;
 	struct cpumask mask;
 	//const struct cpumask *no_use_cpu_mask = get_cpu_mask(WRR_EMPTY_CPU);
-	
+	printk("[%d] migrate start\n", p->pid);
 	struct rq_flags rf;
 	int min_weight_sum = 100000;
 	rcu_read_lock();
@@ -4050,9 +4050,11 @@ static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_str
 		if (task_running(rq, p) || p->state ==TASK_WAKING) {
 			struct migration_arg arg = {p, dest_cpu};
 			//task_rq_unlock(rq, p, &rf);
+			printk("[%d] stop one cpu\n", p->pid);
 			stop_one_cpu(cpu_of(rq), migration_cpu_stop, &arg);
+			printk("[%d] stop one cpu finish\n", p->pid);
 			tlb_migrate_finish(p->mm);
-			return rq;
+			return;
 		} else if (task_on_rq_queued(p)) {
 			rq = move_queued_task(rq, &rf, p, dest_cpu);
 		}
@@ -4064,8 +4066,9 @@ static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_str
 		// cpumask_set_cpu(3, &mask);
 		// sched_setaffinity(p->pid, &mask);
 	}
+	printk("[%d] migrate finished\n", p->pid);
 
-	return rq;
+	return;
 
 }
 
@@ -4086,7 +4089,7 @@ static int __sched_setscheduler(struct task_struct *p,
 	struct cpumask mask;
 
 	if(attr->sched_policy == SCHED_WRR) {
-		rq = migrate_task_to_wrr_existed_cpu(task_rq(p), p);
+		migrate_task_to_wrr_existed_cpu(task_rq(p), p);
 	}
 
 

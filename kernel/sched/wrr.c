@@ -238,7 +238,7 @@ static void switched_from_wrr(struct rq *rq, struct task_struct *p)
 	if (resched) {
 		// I want to find current task's next task in hijected runqueue.
 		// The reason why I pick next (not chossing highest weight task) is that
-		// I want to decrease searching cos : It's my imagination
+		// I want to decrease searching cost : It's my imagination
 		hijacked_wrr_se = container_of(hijacked_rq->curr->wrr.run_list.next, struct sched_wrr_entity, run_list);
 		hijacked_task = wrr_task_of(hijacked_wrr_se);
 		deactivate_task(hijacked_rq, hijacked_task, 0);

@@ -29,6 +29,15 @@ struct wrr_rq {
 ### 2.1 Design
 - task 마다 1~20 사이의 weight를 세팅해주고 이 범위를 넘어가는 weight를 set 하려 하면 에러를 리턴한다. default weight는 10으로, process가 fork() 되자마자 직후의 weight는 이 default값인 10으로 설정 돼 있다.
 - task의 time slice는 weight * 10ms 로 설정 되고 해당 시간만큼만 run한뒤 스케줄링 된다.
+- include/linux/sched/wrr.h 파일에 constant 변수에 대한 매크로 설정
+
+``` C
+#define WRR_TIMESLICE		(10 * HZ / 1000)
+#define WRR_DEFAULT_WEIGHT	10
+#define WRR_DEFAULT_TIMESLICE	(WRR_TIMESLICE * WRR_DEFAULT_WEIGHT)
+#define WRR_MAX_WEIGHT		20
+#define WRR_MIN_WEIGHT		1
+``` 
 
 ### 2.2 cosnt struct sched_class wrr_sched_class
 - kernel/sched/wrr.c 안에 아래와 같이 wrr_sched_class를 선언해주고, 필요한 method들을 구현해준다. 모두다 구현할 필요는 없다

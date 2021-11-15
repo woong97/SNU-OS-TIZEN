@@ -1,4 +1,4 @@
-
+#include <linux/kernel.h>
 
 asmlinkage long sys_set_rotation(int degree)
 {

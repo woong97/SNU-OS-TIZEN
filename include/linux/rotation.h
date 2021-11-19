@@ -13,5 +13,5 @@ typedef struct __rotation_range_descriptor {
 	int range;
 	int rw_type;
 	struct list_head list;
-} rotation_rd;
+} rot_rd;
 

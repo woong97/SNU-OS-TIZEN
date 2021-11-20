@@ -77,6 +77,20 @@ static rot_rd *create_rd(pid_t pid, int degree, int range, int rw_type) {
 	return rd;
 }
 
+void remove_rd(pid_t pid, int degree, int range, int rw_type) {
+	rot_rd *rd, *tmp;
+	mutex_lock(&rot_rd_list_mutex);
+	list_for_each_entry_safe(rd, tmp, &rot_rd_list, list) {
+		if(rd->pid == pid && rd->rw_type == rw_type) {
+			list_del(&rd->list);
+			kfree(rd);
+			atomic_sub(1, &read_cnt);
+			mutex_unlock(&rot_rd_list_mutex);
+		}
+	}
+	mutex_unlock(&rot_rd_list_mutex);
+}
+
 void rot_cv_wait(wait_queue_head_t *wait_queue, struct mutex *mtx) {
 	// TODO!!!
 	DEFINE_WAIT(wait);
@@ -88,9 +102,19 @@ void rot_cv_wait(wait_queue_head_t *wait_queue, struct mutex *mtx) {
 	mutex_unlock(mtx);
 }
 
-void rot_cv_siganl(wait_queue_head_t *wait_queue) {
+void rot_cv_signal(wait_queue_head_t *wait_queue) {
 	// TODO!
 	wake_up(wait_queue);
+}
+
+static int is_valid_input(int degree, int range) {
+	if (degree > MAX_DEGREE || degree < MIN_DEGREE) {
+		return -1;
+	}
+	if (range < 0 || range >= 180) {
+		return -1;
+	}
+	return 0;
 }
 
 asmlinkage long sys_set_rotation(int degree)
@@ -110,13 +134,9 @@ asmlinkage long sys_set_rotation(int degree)
 asmlinkage long sys_rotlock_read(int degree, int range)
 {
 	rot_rd *rd;
-	if (degree > MAX_DEGREE || degree < MIN_DEGREE) {
-		return -EINVAL;
-	}
-	if (range < 0 || range >= 180) {
-		return -EINVAL;
-	}
-	rd = create_rd(current->pid, degree, range, RT_WRITE);
+	if (is_valid_input(degree, range) == -1) return -EINVAL;
+	
+	rd = create_rd(current->pid, degree, range, RT_READ);
 	
 	mutex_lock(&base_lock);
 	while(1) {
@@ -143,7 +163,25 @@ asmlinkage long sys_rotlock_write(int degree, int range)
 
 asmlinkage long sys_rotunlock_read(int degree, int range)
 {
-	// TODO
+	if (is_valid_input(degree, range) == -1) return -EINVAL;
+	/* I'm not sure we need this (wait in unlock) */
+	///////////////////////////////////////////////
+	mutex_lock(&base_lock);
+	if (is_valid_degree(GET_BEGIN(degree, range), degree, GET_END(degree, range)) != 1) {
+		printk("this problem occured\n");
+		rot_cv_wait(&wait_queue_cv, &base_lock);
+	} else {
+		mutex_unlock(&base_lock);
+	}
+	/////////////////////////////////////////////
+	
+	remove_rd(current->pid, degree, range, RT_READ);
+	mutex_lock(&base_lock);
+	// some studnet use wake_up as below, some studnet doesn't wake_up
+	// Guess: some student thought that delete list is enough???
+	// But I thnik we should wake up some process in wait_queue  => I'm not sure
+	rot_cv_signal(&wait_queue_cv);
+	mutex_unlock(&base_lock);
 	return 0;
 }
 

@@ -84,8 +84,13 @@ void remove_rd(pid_t pid, int degree, int range, int rw_type) {
 		if(rd->pid == pid && rd->rw_type == rw_type) {
 			list_del(&rd->list);
 			kfree(rd);
-			printk("hi remove!\n");
-			atomic_sub(1, &read_cnt);
+			// printk("hi remove!\n");
+			if (rw_type == RT_READ) {
+				atomic_sub(1, &read_cnt);
+			} else if (rw_type == RT_WRITE) {
+				atomic_sub(1, &write_cnt);
+			}
+			// printk("read_cnt: %d\n", atomic_read(&read_cnt));
 			mutex_unlock(&rot_rd_list_mutex);
 		}
 	}
@@ -153,7 +158,7 @@ asmlinkage long sys_rotlock_read(int degree, int range)
 		}
 	}
 	atomic_add(1, &read_cnt);
-	printk("==== read lock occured : %d\n", atomic_read(&read_cnt));
+	// printk("==== read lock occured : %d\n", atomic_read(&read_cnt));
 	mutex_unlock(&base_lock);	
 	return 0;
 }
@@ -175,8 +180,8 @@ asmlinkage long sys_rotlock_write(int degree, int range)
 			rot_cv_wait(&wait_queue_cv, &base_lock);
 		}
 	}
+	atomic_add(1, &write_cnt);
 	mutex_unlock(&base_lock);
-	atomic_add(1, &read_cnt);
 	return 0;
 }
 
@@ -185,7 +190,7 @@ asmlinkage long sys_rotunlock_read(int degree, int range)
 	if (is_valid_input(degree, range) == -1) return -EINVAL;
 	/* I'm not sure we need this (wait in unlock) */
 	///////////////////////////////////////////////
-	printk("===hi unlock read\n");
+	// printk("===hi unlock read\n");
 	mutex_lock(&base_lock);
 	if (is_valid_degree(GET_BEGIN(degree, range), degree, GET_END(degree, range)) != 1) {
 		printk("this problem occured\n");

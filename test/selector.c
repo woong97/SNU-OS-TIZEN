@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/syscall.h>
+#include <unistd.h>
+
 
 #define	FILE_PATH		"integer"
 #define	SYSCALL_ROTLOCK_WRITE	400
@@ -19,8 +21,20 @@ int main(int argc, char *argv[])
 
 	// TEST WRITE
 	// TODO - WRITELOCK
-	fprintf(fp, "%d", number);
-	fclose(fp);
-	printf("Write Succeed\n");
+	while(1) {
+		if (syscall(SYSCALL_ROTLOCK_WRITE, 90, 90) < 0) {
+			printf("write lock failed\n");
+		}
+		FILE *fp = fopen(FILE_PATH, "w");
+	
+		fprintf(fp, "%d", number++);
+		fclose(fp);
+		if (syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90) < 0) {
+			printf("write unlock failed\n");
+		}
+		sleep(1);
+		break;
+	}
+	// printf("Write Succeed\n");
 	return 0;
 }

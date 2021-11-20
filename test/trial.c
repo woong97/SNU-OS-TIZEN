@@ -50,7 +50,10 @@ int main(int argc, char *argv[])
 	// TEST READ!
 	// TODO - READLOCK
 	while (1) {
-		syscall(SYSCALL_ROTLOCK_READ, 90, 90);
+		if (syscall(SYSCALL_ROTLOCK_READ, 90, 90) < 0) {
+			printf("read lock failed\n");
+		}
+
 		FILE *fp = fopen(FILE_PATH, "r");
 		fscanf(fp, "%d", &number);
 		fclose(fp);
@@ -59,7 +62,10 @@ int main(int argc, char *argv[])
 			return EXIT_FAILURE;
 		}
 		sleep(2);
-		syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
+		
+		if (syscall(SYSCALL_ROTUNLOCK_READ, 90, 90) < 0) {
+			printf("read unlock failed\n");
+		}
 	}
 	return EXIT_SUCCESS;
 }

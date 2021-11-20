@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/syscall.h>
 
 #define	FILE_PATH		"integer"
 #define	SYSCALL_ROTLOCK_WRITE	400

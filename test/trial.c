@@ -3,7 +3,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-
+#include <sys/syscall.h>
+#include <unistd.h>
 #define FILE_PATH		"integer"
 #define SYSCALL_ROTLOCK_READ	399
 #define SYSCALL_ROTUNLOCK_READ	401
@@ -48,12 +49,17 @@ int main(int argc, char *argv[])
 	
 	// TEST READ!
 	// TODO - READLOCK
-	FILE *fp = fopen(FILE_PATH, "r");
-	fscanf(fp, "%d", &number);
-	fclose(fp);
-	if (naive_factorization(number, idx) < 0) {
-		perror("Factoraization Failed");
-		return EXIT_FAILURE;
+	while (1) {
+		syscall(SYSCALL_ROTLOCK_READ, 90, 90);
+		FILE *fp = fopen(FILE_PATH, "r");
+		fscanf(fp, "%d", &number);
+		fclose(fp);
+		if (naive_factorization(number, idx) < 0) {
+			perror("Factoraization Failed");
+			return EXIT_FAILURE;
+		}
+		sleep(2);
+		syscall(SYSCALL_ROTUNLOCK_READ, 90, 90);
 	}
 	return EXIT_SUCCESS;
 }

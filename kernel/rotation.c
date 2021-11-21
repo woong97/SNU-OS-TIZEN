@@ -92,6 +92,7 @@ void remove_rd(pid_t pid, int degree, int range, int rw_type) {
 			}
 			// printk("read_cnt: %d\n", atomic_read(&read_cnt));
 			mutex_unlock(&rot_rd_list_mutex);
+			return;
 		}
 	}
 	mutex_unlock(&rot_rd_list_mutex);
@@ -105,7 +106,7 @@ void rot_cv_wait(wait_queue_head_t *wait_queue, struct mutex *mtx) {
 	schedule();
 	mutex_lock(mtx);
 	finish_wait(wait_queue, &wait);
-	mutex_unlock(mtx);
+//	mutex_unlock(mtx);
 }
 
 void rot_cv_signal(wait_queue_head_t *wait_queue, int rw_type) {
@@ -134,8 +135,9 @@ asmlinkage long sys_set_rotation(int degree)
 	       return -1;	
 	curr_degree = degree;
 	mutex_lock(&base_lock);
-	wake_up_all(&wait_queue_cv);
+	// wake_up_all(&wait_queue_cv);
 	process_awoken = find_awoken_count(degree);
+	wake_up_all(&wait_queue_cv);
 	// printk("===process awoken: %d\n", process_awoken);
 	mutex_unlock(&base_lock);
 	return process_awoken;
@@ -144,13 +146,17 @@ asmlinkage long sys_set_rotation(int degree)
 asmlinkage long sys_rotlock_read(int degree, int range)
 {
 	rot_rd *rd;
+	int valid;
 	if (is_valid_input(degree, range) == -1) return -EINVAL;
-	
+	// printk("read lock try\n");	
 	rd = create_rd(current->pid, degree, range, RT_READ);
 	
 	mutex_lock(&base_lock);
 	while(1) {
-		if ((!mutex_is_locked(&write_lock)) &&
+		valid = is_valid_degree(GET_BEGIN(rd->degree, rd->range), degree, GET_END(rd->degree, rd->range));
+		// printk("valid: %d\n", valid);
+		// printk("write cnt: %d\n", atomic_read(&write_cnt));
+		if (!mutex_is_locked(&write_lock) &&
 			is_valid_degree(GET_BEGIN(rd->degree, rd->range), degree, GET_END(rd->degree, rd->range))) {
 			break;
 		} else {
@@ -167,21 +173,29 @@ asmlinkage long sys_rotlock_write(int degree, int range)
 {
 	// TODO
 	rot_rd *rd;
+	int valid;
 	if (is_valid_input(degree, range) == -1) return -EINVAL;
-	
+	// printk(" write lock try!\n");
 	rd = create_rd(current->pid, degree, range, RT_WRITE);
+	// printk("here1\n");
 	mutex_lock(&base_lock);
+	// printk("here2\n");
 	while(1) {
+		valid = is_valid_degree(GET_BEGIN(rd->degree, rd->range), degree, GET_END(rd->degree, rd->range)); 
 		if (mutex_trylock(&write_lock) &&
 			is_valid_degree(GET_BEGIN(rd->degree, rd->range), degree, GET_END(rd->degree, rd->range)) &&
 			(atomic_read(&read_cnt) == 0)) {
 			break;
 		} else {
+			// printk("wait - write - read cnt: %d\n", atomic_read(&read_cnt));
+			// printk("wait - write - valid: %d\n", valid);	
 			rot_cv_wait(&wait_queue_cv, &base_lock);
 		}
 	}
+	// printk("here3\n");
 	atomic_add(1, &write_cnt);
 	mutex_unlock(&base_lock);
+	// printk("===write lock occured\n");
 	return 0;
 }
 
@@ -192,21 +206,21 @@ asmlinkage long sys_rotunlock_read(int degree, int range)
 	///////////////////////////////////////////////
 	// printk("===hi unlock read\n");
 	mutex_lock(&base_lock);
-	if (is_valid_degree(GET_BEGIN(degree, range), degree, GET_END(degree, range)) != 1) {
+	while (is_valid_degree(GET_BEGIN(degree, range), degree, GET_END(degree, range)) != 1) {
 		printk("this problem occured\n");
 		rot_cv_wait(&wait_queue_cv, &base_lock);
-	} else {
-		mutex_unlock(&base_lock);
 	}
 	/////////////////////////////////////////////
 	
 	remove_rd(current->pid, degree, range, RT_READ);
-	mutex_lock(&base_lock);
+	// mutex_lock(&base_lock);
+	
 	// some studnet use wake_up as below, some studnet doesn't wake_up
 	// Guess: some student thought that delete list is enough???
 	// But I thnik we should wake up some process in wait_queue  => I'm not sure
 	rot_cv_signal(&wait_queue_cv, RT_READ);
 	mutex_unlock(&base_lock);
+	//iprintk("unlock succeed %d\n", atomic_read(&read_cnt));
 	return 0;
 }
 
@@ -218,17 +232,15 @@ asmlinkage long sys_rotunlock_write(int degree, int range)
 	/* I'm not sure we need this (wait in unlock) */
 	///////////////////////////////////////////////
 	mutex_lock(&base_lock);
-	if (is_valid_degree(GET_BEGIN(degree, range), degree, GET_END(degree, range)) != 1) {
+	while (is_valid_degree(GET_BEGIN(degree, range), degree, GET_END(degree, range)) != 1) {
 		printk("this problem occured\n");
 		rot_cv_wait(&wait_queue_cv, &base_lock);
-	} else {
-		mutex_unlock(&base_lock);
 	}
 	/////////////////////////////////////////////
 	
 	remove_rd(current->pid, degree, range, RT_WRITE);
-	mutex_lock(&base_lock);
-
+	// mutex_lock(&base_lock);
+	mutex_unlock(&write_lock);
 	// some studnet use wake_up as below, some studnet doesn't wake_up
 	// Guess: some student thought that delete list is enough???
 	// But I thnik we should wake up some process in wait_queue  => I'm not sure
@@ -236,6 +248,7 @@ asmlinkage long sys_rotunlock_write(int degree, int range)
 	// In read unlock,  wake up
 	rot_cv_signal(&wait_queue_cv, RT_WRITE);
 	mutex_unlock(&base_lock);
+	// printk("write unlock succeed %d\n", atomic_read(&write_cnt));
 	return 0;
 }
 

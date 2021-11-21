@@ -17,13 +17,14 @@ int main(int argc, char *argv[])
 	}
 
 	int number = atoi(argv[1]);
-	FILE *fp = fopen(FILE_PATH, "w");
+	// FILE *fp = fopen(FILE_PATH, "w");
 
 	// TEST WRITE
 	// TODO - WRITELOCK
 	while(1) {
 		if (syscall(SYSCALL_ROTLOCK_WRITE, 90, 90) < 0) {
 			printf("write lock failed\n");
+			return EXIT_FAILURE;
 		}
 		FILE *fp = fopen(FILE_PATH, "w");
 	
@@ -31,10 +32,11 @@ int main(int argc, char *argv[])
 		fclose(fp);
 		if (syscall(SYSCALL_ROTUNLOCK_WRITE, 90, 90) < 0) {
 			printf("write unlock failed\n");
+			return EXIT_FAILURE;
 		}
+		printf("write succeed: %d\n", number);
 		sleep(1);
-		break;
 	}
 	// printf("Write Succeed\n");
-	return 0;
+	return EXIT_SUCCESS;
 }

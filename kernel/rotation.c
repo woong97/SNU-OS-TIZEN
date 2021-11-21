@@ -180,18 +180,19 @@ asmlinkage long sys_rotlock_write(int degree, int range)
 	// printk("here1\n");
 	mutex_lock(&base_lock);
 	// printk("here2\n");
+	
 	while(1) {
-		valid = is_valid_degree(GET_BEGIN(rd->degree, rd->range), degree, GET_END(rd->degree, rd->range)); 
 		if (mutex_trylock(&write_lock) &&
-			is_valid_degree(GET_BEGIN(rd->degree, rd->range), degree, GET_END(rd->degree, rd->range)) &&
-			(atomic_read(&read_cnt) == 0)) {
+			is_valid_degree(GET_BEGIN(rd->degree, rd->range), degree, GET_END(rd->degree, rd->range))) {
+			while(atomic_read(&read_cnt) > 0) {
+				rot_cv_wait(&wait_queue_cv, &base_lock);
+			}
 			break;
 		} else {
-			// printk("wait - write - read cnt: %d\n", atomic_read(&read_cnt));
-			// printk("wait - write - valid: %d\n", valid);	
 			rot_cv_wait(&wait_queue_cv, &base_lock);
 		}
 	}
+
 	// printk("here3\n");
 	atomic_add(1, &write_cnt);
 	mutex_unlock(&base_lock);

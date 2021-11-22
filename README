@@ -1,5 +1,0 @@
-### Tip
-- Execute under command in "Tizen shell" after execute ./qemu.sh
-```
-mount -o rw,remount /dev/mmcblk0p2 /
-```

@@ -65,6 +65,20 @@ int is_valid_degree(int begin, int degree, int end) {
 - lock을 잡으려는 process의 degree와 range 범위와 sys_set_rotation에 의해 set된 degree 가 범위에 맞게 들어오는지 계속 확인해줘야 하는데 해당 함수를 위와 같이 만들었습니다.
 
 ### 2.3 sys_set_rotation
+```C
+asmlinkage long sys_set_rotation(int degree)
+{
+	int process_awoken = 0;
+	if (degree > MAX_DEGREE || degree < MIN_DEGREE)
+	       return -1;	
+	curr_degree = degree;
+	mutex_lock(&base_lock);
+	process_awoken = find_awoken_count(degree);
+	wake_up_all(&wait_queue_cv);
+	mutex_unlock(&base_lock);
+	return process_awoken;
+}
+```
 - global 변수로 선언한 curr_degree를 새로 set할 degree로 바꿔주고, process 들을 깨우고 깨워야할 process 개수를 계산하고 그 값을 return 합니다.
 ```C
 int find_awoken_count(int degree) {

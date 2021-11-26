@@ -9,9 +9,9 @@ typedef struct __rotation_range_descriptor {
 	int range;
 	int rw_type;
 	struct list_head list;
-} rot_rd;
+} rot_rd;		// defined in include/linux/rotation.h
 
-LIST_HEAD(rot_rd_list);
+LIST_HEAD(rot_rd_list); // defined in kernel/rotation.c
 ```
 - 이번 프로젝트에서 가장 주요한 자료구조 입니다. 위를 include/linux/rotation.h 파일에 정의해줍니다
 - lock을 잡으려고 시도하는 모든 process들을 하나의 queue에 넣어줘서 관리해줘야 하기 때문에, pid_t, struct list_head field가 존재합니다. 그리고 연결 리스트로 연결하기 위해 LIST_HEAD를 만들어줍니다. 해당 프로세스가 read lock을 잡으려 했는지, write lock을 잡으려 했는지 알기 위해 int rw_type이라는것도 정의해줍니다. 
@@ -210,5 +210,5 @@ pkill -f "rotd"
 ```
 
 ## 4. Lessons learned
-- 실제 개발할 떄 read lock, write lock을 많이 사용하는데, 이를 직접 구현해보고 원리를 확실히 알 수 있어서 뜻깊은 시간이었다.
+- 실제 개발할 때 read lock, write lock을 많이 사용하는데, 이를 직접 구현해보고 원리를 확실히 알 수 있어서 뜻 깊은 시간이었다.
 - write lock의 starvation을 어떻게 막을 수 있을지 고민하는 과정이 매우 즐거웠고, 내가 한 방법 말고도 더 다양하게 시도해볼 수 있을 것 같다.  

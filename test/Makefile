@@ -3,7 +3,7 @@ CFLAGS=-I../include
 
 .PHONY=clean
 
-TARGET=gpsupdate
+TARGET=gpsupdate file_loc
 
 all: $(TARGET)
 

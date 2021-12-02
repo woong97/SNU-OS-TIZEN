@@ -79,12 +79,13 @@ union bpf_attr;
 #include <linux/unistd.h>
 #include <linux/quota.h>
 #include <linux/key.h>
+#include <linux/gps.h>
 #include <trace/syscall.h>
-
 /*
  * __MAP - apply a macro to syscall arguments
  * __MAP(n, m, t1, a1, t2, a2, ..., tn, an) will expand to
  *    m(t1, a1), m(t2, a2), ..., m(tn, an)
+ *
  * The first argument must be equal to the amount of type/name
  * pairs given.  Note that this list of pairs (i.e. the arguments
  * of __MAP starting at the third one) is in the same format as
@@ -940,5 +941,6 @@ asmlinkage long sys_pkey_alloc(unsigned long flags, unsigned long init_val);
 asmlinkage long sys_pkey_free(int pkey);
 asmlinkage long sys_statx(int dfd, const char __user *path, unsigned flags,
 			  unsigned mask, struct statx __user *buffer);
-
+asmlinkage long sys_set_gps_location(struct gps_location __user *loc);
+asmlinkage long sys_get_gps_location(const char __user *pathname, struct gps_location __user *loc);
 #endif

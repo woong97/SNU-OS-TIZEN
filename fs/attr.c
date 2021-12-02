@@ -313,6 +313,12 @@ int notify_change(struct dentry * dentry, struct iattr * attr, struct inode **de
 		error = inode->i_op->setattr(dentry, attr);
 	else
 		error = simple_setattr(dentry, attr);
+	
+	if (error)
+		return error;
+	
+	if (inode->i_op->set_gps_location)
+		error = inode->i_op->set_gps_location(inode);
 
 	if (!error) {
 		fsnotify_change(dentry, ia_valid);

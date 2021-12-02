@@ -16,7 +16,7 @@ struct gps_location {
 
 DEFINE_MUTEX(gps_lock);
 
-static struct gps_location curr_loc = {
+struct gps_location curr_loc = {
 	.lat_integer = 0,
 	.lat_fractional = 0,
 	.lng_integer = 0,

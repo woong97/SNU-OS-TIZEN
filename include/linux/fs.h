@@ -60,7 +60,6 @@ struct workqueue_struct;
 struct iov_iter;
 struct fscrypt_info;
 struct fscrypt_operations;
-struct gps_location;
 
 extern void __init inode_init(void);
 extern void __init inode_init_early(void);

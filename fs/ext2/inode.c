@@ -36,6 +36,8 @@
 #include <linux/iomap.h>
 #include <linux/namei.h>
 #include <linux/uio.h>
+#include <linux/gps.h>
+
 #include "ext2.h"
 #include "acl.h"
 #include "xattr.h"
@@ -1659,3 +1661,16 @@ int ext2_setattr(struct dentry *dentry, struct iattr *iattr)
 
 	return error;
 }
+
+int ext2_set_gps_location(struct inode *inode)
+{
+	// TODO
+	return 0;
+}
+
+int ext2_get_gps_location(struct inode *inode, struct gps_location *loc)
+{
+	// TODO
+	return 0;
+}
+

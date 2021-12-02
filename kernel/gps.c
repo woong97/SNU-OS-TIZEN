@@ -2,6 +2,9 @@
 #include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
+#include <linux/namei.h>
+#include <linux/uaccess.h>
+#include <linux/syscalls.h>
 /*
 struct gps_location {
 	int lat_integer;
@@ -80,8 +83,21 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	return 0;
 }
 
+/// If failed, return -1, else succeed return 0
+int gps_distance_permission(struct inode *inode)
+{
+	// TODO
+	return 0;
+}
+
 long sys_get_gps_location(const char __user *pathname, struct gps_location __user *loc)
 {
+	// TODO
+	struct inode *inode=NULL;
+	if (inode_permission(inode, MAY_READ)) {
+		printk("Permission Denied\n");
+		return -EACCES;
+	}
 	// TODO
 	return 0;
 }

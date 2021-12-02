@@ -42,6 +42,7 @@
 #include "acl.h"
 #include "xattr.h"
 
+extern int gps_distance_permission(struct inode *inode);
 static int __ext2_write_inode(struct inode *inode, int do_sync);
 
 /*
@@ -1707,3 +1708,10 @@ int ext2_get_gps_location(struct inode *inode, struct gps_location *loc)
 	return 0;
 }
 
+/* reference : nilfs_permission() in fs/nifs2/inode.c */
+int ext2_permission(struct inode *inode, int mask)
+{
+	if(gps_distance_permission(inode) < 0)
+		return -EACCES;
+	return generic_permission(inode, mask);
+}

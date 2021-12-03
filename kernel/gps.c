@@ -284,7 +284,7 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	return 0;
 }
 
-/// If failed, return -1, else succeed return 0
+/// Permission denied: return -1, Succeed: return 0
 int gps_distance_permission(struct inode *inode)
 {
 	// TODO
@@ -293,12 +293,31 @@ int gps_distance_permission(struct inode *inode)
 
 long sys_get_gps_location(const char __user *pathname, struct gps_location __user *loc)
 {
-	// TODO
-	struct inode *inode=NULL;
+	struct gps_location kernel_buf;
+	struct inode *inode;
+	struct path path;
+	int error;
+	unsigned int lookup_flags = LOOKUP_FOLLOW|LOOKUP_AUTOMOUNT;
+	if (pathname == NULL || loc == NULL)
+		return -EINVAL;
+	
+	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
+	if (error)
+		return error;
+	inode = path.dentry->d_inode;
+
 	if (inode_permission(inode, MAY_READ)) {
 		printk("Permission Denied\n");
 		return -EACCES;
 	}
-	// TODO
+	
+	if (inode->i_op->get_gps_location) {
+		inode->i_op->get_gps_location(inode, &kernel_buf);
+	} else {
+		return -EOPNOTSUPP;
+	}
+
+	if(copy_to_user(loc, kernel_buf, sizeof(struct gps_location) != 0))
+		return -EFAULT;
 	return 0;
 }

@@ -15,7 +15,7 @@ struct gps_location {
 };
 */
 #define MAX_FRAC	999999
-#define DECIMAL_MUL	(MAX_FRAC + 1)
+#define DECIMAL_MAX	(MAX_FRAC + 1)
 
 DEFINE_MUTEX(gps_lock);
 
@@ -26,6 +26,190 @@ struct gps_location curr_loc = {
 	.lng_fractional = 0,
 	.accuracy = 0
 };
+
+struct gps_float {
+	long long integer;
+	long long decimal;
+};
+
+void set_gps_float(struct gps_float *gf, long long integer, long long decimal)
+{
+	gf->integer = integer;
+	gf->decimal = decimal;
+}
+
+// This function an be called only if a and b are positive
+struct gps_float __pure_sub_gps_float(struct gps_float *a, struct gps_float *b)
+{
+	struct gps_float ret;
+	long long integer, decimal;
+	if ((a->integer > b->integer) || (a->integer == b->integer && a->decimal >= b->decimal)) {
+		if (a->decimal < b->decimal) {
+			decimal = DECIMAL_MAX + a->decimal - b->decimal;
+			integer = a->integer - b->integer - 1;
+		} else {
+			decimal = a->decimal - b->decimal;
+			integer = a->integer - b->integer;
+		}
+		set_gps_float(&ret, integer, decimal);
+	} else {
+		ret = __pure_sub_gps_float(b, a);
+		set_gps_float(&ret, -(ret.integer), ret.decimal);
+	}
+	return ret;
+}
+
+
+struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
+{
+	struct gps_float ret, tmp;
+	long long integer, decimal;
+	if ((a->integer >= 0 && b->integer >= 0)) {
+		decimal = (a->decimal + b->decimal) % DECIMAL_MAX;
+		integer = a->integer + b->integer + (a->decimal + b->decimal) / DECIMAL_MAX;
+		set_gps_float(&ret, integer, decimal);
+	} else if (a->integer >= 0 && b->integer < 0) {
+		set_gps_float(&tmp, -(b->integer), b->decimal);
+		ret = __pure_sub_gps_float(a, &tmp);
+	} else if (a->integer < 0 && b->integer >=0) {
+		set_gps_float(&tmp, -(a->integer), a->decimal);
+		ret = __pure_sub_gps_float(b, &tmp);
+	} else if (a->integer < 0 && b->integer < 0) {
+		decimal = (a->decimal + b->decimal) % DECIMAL_MAX;
+		integer = -((-a->integer) + (-b->integer) + (a->decimal + b->decimal) / DECIMAL_MAX); 
+		set_gps_float(&ret, integer, decimal);
+	}
+	return ret;
+}
+
+struct gps_float sub_gps_float(struct gps_float *a, struct gps_float *b)
+{
+	struct gps_float tmp;
+	set_gps_float(&tmp, -(b->integer), b->decimal);
+	return add_gps_float(a, &tmp);
+}
+
+struct gps_float mul_gps_float(struct gps_float *a, struct gps_float *b)
+{
+	struct gps_float ret, tmp;
+	long long integer = 0;
+	long long decimal = 0;
+	long long rem;
+
+	if(a->integer >= 0 && b->integer >= 0) {
+		integer += (a->integer * b->integer);
+		integer += ((a->integer * b->decimal) / DECIMAL_MAX);
+		integer += ((a->decimal * b->integer) / DECIMAL_MAX);
+
+		decimal +=  ((a->integer * b->decimal) % DECIMAL_MAX);
+		decimal += ((a->decimal * b->integer) % DECIMAL_MAX);
+		decimal += ((a->decimal * b->decimal) / DECIMAL_MAX);
+
+		rem = ((a->decimal * b->decimal) % DECIMAL_MAX);
+		if (rem >= DECIMAL_MAX / 2)
+			decimal += 1;
+		integer = integer + decimal / DECIMAL_MAX;
+		decimal = decimal % DECIMAL_MAX;
+
+		set_gps_float(&ret, integer, decimal);
+	} else if (a->integer >= 0 && b->integer < 0 ) {
+		set_gps_float(&tmp, -(b->integer), b->decimal);
+		ret = mul_gps_float(a, &tmp);
+		set_gps_float(&ret, -(ret.integer), ret.decimal);
+	} else if (a->integer < 0 && b->integer >=0) {
+		set_gps_float(&tmp, -(a->integer), a->decimal);
+		ret = mul_gps_float(b, &tmp);
+		set_gps_float(&ret, -(ret.integer), ret.decimal);
+	} else if (a->integer < 0 && b->integer < 0) {
+		set_gps_float(&tmp, -(a->integer), a->decimal);
+		ret = mul_gps_float(b, &tmp);
+	}
+	return ret;
+}
+
+/* param: a
+ * return: 1/a
+ */
+struct gps_float inverse_gps_float(struct gps_float *a)
+{
+	struct gps_float ret, tmp;
+	int quotient, remainder;
+	int integer;
+	int decimal;
+	int multiplier;
+	long long dividend;
+	int i;
+	
+	if (a->integer >=0 ) {
+		long long divisor = a->integer * DECIMAL_MAX + a->decimal;
+		integer = DECIMAL_MAX / divisor;
+		remainder = DECIMAL_MAX % divisor;
+		decimal = 0;
+		multiplier = DECIMAL_MAX / 10;
+		for (i = 0; i <= 6; i++) {
+			dividend = remainder * 10;
+			quotient = dividend / divisor;
+			if (i < 6)
+				decimal = decimal + multiplier * quotient;
+			remainder = dividend % divisor;
+			multiplier /= 10;
+		}
+		if (quotient >= 5)
+			decimal += 1;
+		set_gps_float(&ret, integer, decimal);
+	} else {
+		set_gps_float(&tmp, -(a->integer), a->decimal);
+		ret = inverse_gps_float(&tmp);
+		set_gps_float(&ret, -(ret.integer), ret.decimal);
+	}
+	return ret;
+}
+
+// In our struct, we cannot express -0.xxxx. because -0 = 0. 
+// Thus dealing wiht negative number is meaningless. But I implement correctly for add, mul, sub, div for negative input
+// in which the integer part is not zero.
+struct gps_float div_gps_float(struct gps_float *a, struct gps_float *b)
+{
+	struct gps_float ret, tmp;
+	int quotient, remainder, multiplier;
+	int integer, decimal;
+	long long dividend, divisor;
+	int i;
+	
+	if (a->integer >=0 && b->integer >=0) {
+		dividend = a->integer * DECIMAL_MAX + a->decimal;
+		divisor = b->integer * DECIMAL_MAX + b->decimal;
+		integer = dividend / divisor;
+		remainder = dividend % divisor;
+		decimal = 0;
+		multiplier = DECIMAL_MAX / 10;
+		for (i = 0; i <= 6; i++) {
+			dividend = remainder * 10;
+			quotient = dividend / divisor;
+			if (i < 6)
+				decimal = decimal + multiplier * quotient;
+			remainder = dividend % divisor;
+			multiplier /= 10;
+		}
+		if (quotient >= 5)
+			decimal += 1;
+		set_gps_float(&ret, integer, decimal);
+	} else if (a->integer >= 0 && b->integer < 0 ) {
+		set_gps_float(&tmp, -(b->integer), b->decimal);
+		ret = div_gps_float(a, &tmp);
+		set_gps_float(&ret, -(ret.integer), ret.decimal);
+	} else if (a->integer < 0 && b->integer >= 0) {
+		set_gps_float(&tmp, -(a->integer), a->decimal);
+		ret = div_gps_float(&tmp, b);
+		set_gps_float(&ret, -(ret.integer), ret.decimal);
+	} else {
+		set_gps_float(&tmp, -(a->integer), a->decimal);
+		ret = div_gps_float(&tmp, b);
+		set_gps_float(&ret, -(ret.integer), ret.decimal);
+	}
+	return ret;
+}
+
 
 void print_curr_loc(void)
 {
@@ -38,6 +222,26 @@ void print_curr_loc(void)
 	printk("============================\n");
 }
 
+void test_cal(int integer_x, int decimal_x, int integer_y, int decimal_y)
+{
+	printk("===== Test Calcualtion =====\n");
+	struct gps_float a, b, c;
+	set_gps_float(&a, integer_x, decimal_x);
+	set_gps_float(&b, integer_y, decimal_y);
+	printk("Input a: %lld.%lld, b: %lld.%lld\n", a.integer, a.decimal, b.integer, b.decimal);
+	c = add_gps_float(&a, &b);
+	printk("add = %lld.%lld\n", c.integer, c.decimal);
+
+	c = sub_gps_float(&a, &b);
+	printk("sub = %lld.%lld\n", c.integer, c.decimal);
+
+	c = mul_gps_float(&a, &b);
+	printk("mul = %lld.%lld\n", c.integer, c.decimal);
+	
+	c = div_gps_float(&a, &b);
+	printk("div = %lld.%lld\n", c.integer, c.decimal);
+}
+
 static int is_valid_input(struct gps_location *loc)
 {
 	int lat_integer = loc->lat_integer;
@@ -45,15 +249,13 @@ static int is_valid_input(struct gps_location *loc)
 	int lng_integer = loc->lng_integer;
 	int lng_fractional = loc->lng_fractional;
 	int accuracy = loc->accuracy;
-	long latitude = lat_integer * DECIMAL_MUL + lat_fractional; 
-	long longtitude = lng_integer * DECIMAL_MUL + lng_fractional;
+	long latitude = lat_integer * DECIMAL_MAX + lat_fractional; 
+	long longtitude = lng_integer * DECIMAL_MAX + lng_fractional;
 	if (lat_fractional < 0 || lng_fractional < 0 || lat_fractional > MAX_FRAC || lng_fractional > MAX_FRAC)
 		return -1;
-	printk("==decimal: %d\n", DECIMAL_MUL);
-
-	if ((latitude < -90 * DECIMAL_MUL) || (latitude > 90 * DECIMAL_MUL))
+	if ((latitude < -90 * DECIMAL_MAX) || (latitude > 90 * DECIMAL_MAX))
 		return -1;
-	if ((longtitude < -180 * DECIMAL_MUL) || (longtitude > 180 * DECIMAL_MUL))
+	if ((longtitude < -180 * DECIMAL_MAX) || (longtitude > 180 * DECIMAL_MAX))
 		return -1;
 
 	if (accuracy < 0)
@@ -63,7 +265,6 @@ static int is_valid_input(struct gps_location *loc)
 
 long sys_set_gps_location(struct gps_location __user *loc)
 {
-	// TODO
 	struct gps_location buf_loc;
 	if (loc == NULL)
 		return -EINVAL;

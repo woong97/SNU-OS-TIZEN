@@ -14,8 +14,10 @@ struct gps_location {
 	int accuracy;
 };
 */
-#define MAX_FRAC	999999
-#define DECIMAL_MAX	(MAX_FRAC + 1)
+#define MAX_FRAC		999999
+#define DECIMAL_MAX		(MAX_FRAC + 1)
+#define AVG_EARTH_RADIUS	6371009
+
 
 DEFINE_MUTEX(gps_lock);
 
@@ -30,6 +32,32 @@ struct gps_location curr_loc = {
 struct gps_float {
 	long long integer;
 	long long decimal;
+};
+
+struct gps_float PI = {
+	.integer = 3,
+	.decimal = 141593
+};
+
+struct gps_float HALF_PI = {
+	.integer = 1,
+	.decimal = 570796
+};
+
+// pi / 180
+struct gps_float RADIAN_PI = {
+	.integer = 0,
+	.decimal = 17453
+};
+
+struct gps_float ONE = {
+	.integer = 1,
+	.decimal = 0
+};
+
+struct gps_float ZERO = {
+	.integer = 0,
+	.decimal = 0
 };
 
 void set_gps_float(struct gps_float *gf, long long integer, long long decimal)
@@ -60,7 +88,7 @@ struct gps_float __pure_sub_gps_float(struct gps_float *a, struct gps_float *b)
 }
 
 
-struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
+/*struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
 {
 	struct gps_float ret, tmp;
 	long long integer, decimal;
@@ -80,13 +108,33 @@ struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
 		set_gps_float(&ret, integer, decimal);
 	}
 	return ret;
+}*/
+struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
+{
+	struct gps_float ret;
+	long long integer, decimal;
+
+	decimal = (a->decimal + b->decimal) % DECIMAL_MAX;
+	integer = a->integer + b->integer + (a->decimal + b->decimal) / DECIMAL_MAX;
+	set_gps_float(&ret, integer, decimal);
+
+	return ret;
 }
 
+// this function only can be called a, b are positive , a>=b
 struct gps_float sub_gps_float(struct gps_float *a, struct gps_float *b)
 {
-	struct gps_float tmp;
-	set_gps_float(&tmp, -(b->integer), b->decimal);
-	return add_gps_float(a, &tmp);
+	struct gps_float ret;
+	int integer, decimal;
+	if (a->decimal < b->decimal) {
+		decimal = DECIMAL_MAX + a->decimal - b->decimal;
+		integer = a->integer - b->integer - 1;
+	} else {
+		decimal = a->decimal - b->decimal;
+		integer = a->integer - b->integer;
+	}
+	set_gps_float(&ret, integer, decimal);
+	return ret;
 }
 
 struct gps_float mul_gps_float(struct gps_float *a, struct gps_float *b)
@@ -127,52 +175,14 @@ struct gps_float mul_gps_float(struct gps_float *a, struct gps_float *b)
 	return ret;
 }
 
-/* param: a
- * return: 1/a
- */
-struct gps_float inverse_gps_float(struct gps_float *a)
-{
-	struct gps_float ret, tmp;
-	int quotient, remainder;
-	int integer;
-	int decimal;
-	int multiplier;
-	long long dividend;
-	int i;
-	
-	if (a->integer >=0 ) {
-		long long divisor = a->integer * DECIMAL_MAX + a->decimal;
-		integer = DECIMAL_MAX / divisor;
-		remainder = DECIMAL_MAX % divisor;
-		decimal = 0;
-		multiplier = DECIMAL_MAX / 10;
-		for (i = 0; i <= 6; i++) {
-			dividend = remainder * 10;
-			quotient = dividend / divisor;
-			if (i < 6)
-				decimal = decimal + multiplier * quotient;
-			remainder = dividend % divisor;
-			multiplier /= 10;
-		}
-		if (quotient >= 5)
-			decimal += 1;
-		set_gps_float(&ret, integer, decimal);
-	} else {
-		set_gps_float(&tmp, -(a->integer), a->decimal);
-		ret = inverse_gps_float(&tmp);
-		set_gps_float(&ret, -(ret.integer), ret.decimal);
-	}
-	return ret;
-}
-
 // In our struct, we cannot express -0.xxxx. because -0 = 0. 
 // Thus dealing wiht negative number is meaningless. But I implement correctly for add, mul, sub, div for negative input
 // in which the integer part is not zero.
 struct gps_float div_gps_float(struct gps_float *a, struct gps_float *b)
 {
 	struct gps_float ret, tmp;
-	int quotient, remainder, multiplier;
-	int integer, decimal;
+	long long quotient, remainder, multiplier;
+	long long integer, decimal;
 	long long dividend, divisor;
 	int i;
 	
@@ -210,6 +220,199 @@ struct gps_float div_gps_float(struct gps_float *a, struct gps_float *b)
 	return ret;
 }
 
+// a > b: return 1, a==b: return 0; a<b: return -1
+int comp_gps_float(struct gps_float *a, struct gps_float *b)
+{
+	if (a->integer > b->integer) {
+		return 1;
+	} else if (a->integer < b->integer) {
+		return -1;
+	} else {
+		if (a->decimal > b->decimal) {
+			return 1;
+		} else if (a->decimal < b->decimal) {
+			return -1;
+		} else {
+			return 0;
+		}
+	}
+}
+
+struct gps_float power_gps_float(struct gps_float *x, int power)
+{
+	int i;
+	struct gps_float ret = ONE;
+	for (i = 0; i < power ; i++) {
+		ret = mul_gps_float(&ret, x);
+	}
+	return ret;
+}
+
+struct gps_float factorial_gps_float(int num)
+{
+	struct gps_float ret = ONE;
+	struct gps_float mul;
+	int i;
+	for (i = 1; i <= num; i++) {
+		set_gps_float(&mul, i, 0);
+		ret = mul_gps_float(&ret, &mul);
+	}
+	return ret;
+}
+
+struct gps_float degree2rad(struct gps_float *x)
+{
+	return mul_gps_float(x, &RADIAN_PI);
+}
+// return |sin(x)| = sin(|x|)
+
+struct gps_float abs_sin_gps_float(struct gps_float *x)
+{
+	// int integer, decimal;
+	struct gps_float ret;
+	struct gps_float term;
+	// int factorial;
+	struct gps_float power_tmp, factorial_tmp;
+	if (x->integer < 0)
+		set_gps_float(x, -(x->integer), x->decimal);
+	
+	term = *x;
+	ret = *x;
+	
+	power_tmp = power_gps_float(x, 3);
+	factorial_tmp = factorial_gps_float(3);
+	term = div_gps_float(&power_tmp, &factorial_tmp);		// x^3/3!
+	if (comp_gps_float(&ret, &term) >= 0) {
+		ret = sub_gps_float(&ret, &term);			// x-x^3/3!
+		power_tmp = power_gps_float(x, 5);
+		factorial_tmp = factorial_gps_float(5);
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^5/5!
+		ret = add_gps_float(&ret, &term);			// x-x^3+x^5/5!
+
+		power_tmp = power_gps_float(x, 7);
+		factorial_tmp = factorial_gps_float(7);
+
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^7/7!
+		if (comp_gps_float(&ret, &term) >= 0) {
+			ret = sub_gps_float(&ret, &term);
+		} else {
+			ret = sub_gps_float(&term, &ret);
+		}
+	} else if(comp_gps_float(&ret, &term) == -1) {
+		ret = sub_gps_float(&term, &ret);
+		power_tmp = power_gps_float(x, 5);
+		factorial_tmp = factorial_gps_float(5);
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^5/5!
+		if (comp_gps_float(&ret, &term) >= 0) {
+			printk("here1\n");
+			ret = sub_gps_float(&ret, &term);		// originally negative
+			
+			power_tmp = power_gps_float(x, 7);
+			factorial_tmp = factorial_gps_float(7);
+			term = div_gps_float(&power_tmp, &factorial_tmp);	// x^7/7!
+			ret = add_gps_float(&ret, &term);
+		} else {
+			ret = sub_gps_float(&term, &ret);		// originally positive
+			power_tmp = power_gps_float(x, 7);
+			factorial_tmp = factorial_gps_float(7);
+			term = div_gps_float(&power_tmp, &factorial_tmp);	// x^7/7!
+			if (comp_gps_float(&ret, &term) >= 0) {
+				ret = sub_gps_float(&ret, &term);
+			} else {
+				ret = sub_gps_float(&term, &ret);
+			}
+		}
+
+	}
+	return ret;
+}
+
+struct gps_float abs_cos_gps_float(struct gps_float *x)
+{
+/*	struct gps_float transpose;
+	struct gps_float half_degree = {.integer = 90, .decimal = 0};
+	transpose = sub_gps_float(&HALF_PI, x);
+	return abs_sin_gps_float(&transpose);
+*/
+	// int integer, decimal;
+	struct gps_float ret;
+	struct gps_float term = *x;
+	// int factorial;
+	struct gps_float power_tmp, factorial_tmp;
+
+	ret = ONE;
+	/*
+	power_tmp = power_gps_float(x, 2);
+	factorial_tmp = factorial_gps_float(2);
+	term = div_gps_float(&power_tmp, &factorial_tmp);		// x^2/2!
+	if (comp_gps_float(&ret, &term) >= 0) {
+		ret = sub_gps_float(&ret, &term);			// 1-x^2/2!
+		power_tmp = power_gps_float(x, 4);
+		factorial_tmp = factorial_gps_float(4);
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^4/4!
+		ret = add_gps_float(&ret, &term);			// 1-x^2/2!+x^4/4!
+	} else if(comp_gps_float(&ret, &term) == -1) {
+		power_tmp = power_gps_float(x, 4);
+		factorial_tmp = factorial_gps_float(4);
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^4/4!
+		if (comp_gps_float(&ret, &term) >= 0) {
+			ret = sub_gps_float(&ret, &term);
+		} else {
+			ret = sub_gps_float(&term, &ret);
+		}
+	}
+	*/
+	printk("x: %lld.%lld\n", x->integer, x->decimal);
+	power_tmp = power_gps_float(x, 2);
+	factorial_tmp = factorial_gps_float(2);
+	term = div_gps_float(&power_tmp, &factorial_tmp);		// x^3/3!
+	if (comp_gps_float(&ret, &term) >= 0) {
+		ret = sub_gps_float(&ret, &term);			// x-x^3/3!
+		power_tmp = power_gps_float(x, 4);
+		factorial_tmp = factorial_gps_float(4);
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^5/5!
+		ret = add_gps_float(&ret, &term);			// x-x^3+x^5/5!
+
+		power_tmp = power_gps_float(x, 6);
+		factorial_tmp = factorial_gps_float(6);
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^7/7!
+		if (comp_gps_float(&ret, &term) >= 0) {
+			ret = sub_gps_float(&ret, &term);
+		} else {
+			ret = sub_gps_float(&term, &ret);
+		}
+	} else if(comp_gps_float(&ret, &term) == -1) {
+
+		ret = sub_gps_float(&term, &ret);
+		power_tmp = power_gps_float(x, 4);
+		factorial_tmp = factorial_gps_float(4);
+		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^5/5!
+
+		if (comp_gps_float(&ret, &term) >= 0) {
+			ret = sub_gps_float(&ret, &term);		// originally negative
+			
+			power_tmp = power_gps_float(x, 6);
+			factorial_tmp = factorial_gps_float(6);
+			term = div_gps_float(&power_tmp, &factorial_tmp);	// x^7/7!
+			ret = add_gps_float(&ret, &term);
+		} else {
+			ret = sub_gps_float(&term, &ret);		// originally positive
+			
+			power_tmp = power_gps_float(x, 6);
+			factorial_tmp = factorial_gps_float(6);
+			term = div_gps_float(&power_tmp, &factorial_tmp);	// x^7/7!
+			if (comp_gps_float(&ret, &term) >= 0) {
+				ret = sub_gps_float(&ret, &term);
+			} else {
+				ret = sub_gps_float(&term, &ret);
+			}
+		}
+
+	}
+
+	return ret;
+
+}
 
 void print_curr_loc(void)
 {
@@ -226,9 +429,12 @@ void test_cal(int integer_x, int decimal_x, int integer_y, int decimal_y)
 {
 	printk("===== Test Calcualtion =====\n");
 	struct gps_float a, b, c;
+	struct gps_float rad;
 	set_gps_float(&a, integer_x, decimal_x);
 	set_gps_float(&b, integer_y, decimal_y);
+	
 	printk("Input a: %lld.%lld, b: %lld.%lld\n", a.integer, a.decimal, b.integer, b.decimal);
+	/*
 	c = add_gps_float(&a, &b);
 	printk("add = %lld.%lld\n", c.integer, c.decimal);
 
@@ -240,6 +446,15 @@ void test_cal(int integer_x, int decimal_x, int integer_y, int decimal_y)
 	
 	c = div_gps_float(&a, &b);
 	printk("div = %lld.%lld\n", c.integer, c.decimal);
+	*/
+	rad = degree2rad(&a);
+	printk("rad = %lld.%lld\n", rad.integer,rad.decimal);
+	c = abs_sin_gps_float(&rad);
+	printk("sin = %lld.%lld\n", c.integer, c.decimal);
+	
+	c = abs_cos_gps_float(&rad);
+	printk("cos = %lld.%lld\n", c.integer, c.decimal);
+
 }
 
 static int is_valid_input(struct gps_location *loc)
@@ -281,6 +496,12 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	curr_loc.accuracy = buf_loc.accuracy;
 	mutex_unlock(&gps_lock);
 	print_curr_loc();
+	/*
+	test_cal(90, 0, 42, 0);
+	test_cal(-60, 0, 1, 1);
+	test_cal(135, 0, 1, 1);
+	test_cal(45, 0, 1, 1);
+	*/
 	return 0;
 }
 
@@ -317,7 +538,7 @@ long sys_get_gps_location(const char __user *pathname, struct gps_location __use
 		return -EOPNOTSUPP;
 	}
 
-	if(copy_to_user(loc, kernel_buf, sizeof(struct gps_location) != 0))
+	if(copy_to_user(loc, &kernel_buf, sizeof(struct gps_location) != 0))
 		return -EFAULT;
 	return 0;
 }

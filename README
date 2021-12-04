@@ -1,6 +1,0 @@
-### ext2_set_gps_location
-- fs/attr.c notify_chane : 파일이 수정될때 location 기록
-- fs/ext2/namei.c : 파일이 생성될 때 location 기록
-
--fs/ext2/ialloc.c ext2_new_inode do we need?
--fs/ext2/inode.c setsize do we need?

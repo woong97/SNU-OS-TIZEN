@@ -329,40 +329,11 @@ struct gps_float abs_sin_gps_float(struct gps_float *x)
 
 struct gps_float abs_cos_gps_float(struct gps_float *x)
 {
-/*	struct gps_float transpose;
-	struct gps_float half_degree = {.integer = 90, .decimal = 0};
-	transpose = sub_gps_float(&HALF_PI, x);
-	return abs_sin_gps_float(&transpose);
-*/
-	// int integer, decimal;
 	struct gps_float ret;
 	struct gps_float term = *x;
-	// int factorial;
 	struct gps_float power_tmp, factorial_tmp;
 
 	ret = ONE;
-	/*
-	power_tmp = power_gps_float(x, 2);
-	factorial_tmp = factorial_gps_float(2);
-	term = div_gps_float(&power_tmp, &factorial_tmp);		// x^2/2!
-	if (comp_gps_float(&ret, &term) >= 0) {
-		ret = sub_gps_float(&ret, &term);			// 1-x^2/2!
-		power_tmp = power_gps_float(x, 4);
-		factorial_tmp = factorial_gps_float(4);
-		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^4/4!
-		ret = add_gps_float(&ret, &term);			// 1-x^2/2!+x^4/4!
-	} else if(comp_gps_float(&ret, &term) == -1) {
-		power_tmp = power_gps_float(x, 4);
-		factorial_tmp = factorial_gps_float(4);
-		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^4/4!
-		if (comp_gps_float(&ret, &term) >= 0) {
-			ret = sub_gps_float(&ret, &term);
-		} else {
-			ret = sub_gps_float(&term, &ret);
-		}
-	}
-	*/
-	printk("x: %lld.%lld\n", x->integer, x->decimal);
 	power_tmp = power_gps_float(x, 2);
 	factorial_tmp = factorial_gps_float(2);
 	term = div_gps_float(&power_tmp, &factorial_tmp);		// x^3/3!
@@ -414,6 +385,107 @@ struct gps_float abs_cos_gps_float(struct gps_float *x)
 
 }
 
+///input : if input is positive, use this function
+//arccos x return always positive
+struct gps_float acos_pos_gps_float(struct gps_float *x)
+{
+	struct gps_float ret;
+	struct gps_float term = *x;
+	struct gps_float power_tmp, factor_tmp;
+	struct gps_float mul;
+
+	ret = HALF_PI;
+	
+	power_tmp = power_gps_float(x, 1);
+	set_gps_float(&factor_tmp, 1, 0);
+	term = div_gps_float(&power_tmp, &factor_tmp);		// x
+	
+	ret = sub_gps_float(&ret, &term);			// pi/2 -x 
+	
+	power_tmp = power_gps_float(x, 3);			// x^3
+	set_gps_float(&factor_tmp, 6, 0);
+	term = div_gps_float(&power_tmp, &factor_tmp);		// x^3/6
+
+	ret = sub_gps_float(&ret, &term);			//pi/2 - x - x^3/6
+
+	power_tmp = power_gps_float(x, 5);			// x^5
+	set_gps_float(&factor_tmp, 40, 0);			// 40
+	set_gps_float(&mul, 3, 0);				// 3
+	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 40/3
+	term = div_gps_float(&power_tmp, &factor_tmp);		// 3x^5/40
+
+	ret = sub_gps_float(&ret, &term);			// pi/2 - x - x^3/6 - 3x^5/40
+
+	power_tmp = power_gps_float(x, 7);			// x^7
+	set_gps_float(&factor_tmp, 112, 0);			// 112
+	set_gps_float(&mul, 5, 0);				//5
+	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 112/5
+	term = div_gps_float(&power_tmp, &factor_tmp);		// 5x^7/112
+
+	ret = sub_gps_float(&ret, &term);			// pi/2 - x - x^3/6 - 3x^5/40 - 5x^7/112
+
+	power_tmp = power_gps_float(x, 9);			// x^9
+	set_gps_float(&factor_tmp, 1152, 0);			// 1152
+	set_gps_float(&mul, 35, 0);				//35
+	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 1152/35
+	term = div_gps_float(&power_tmp, &factor_tmp);		// 35x^9/1152
+
+	ret = sub_gps_float(&ret, &term);			// pi/2 - x - x^3/6 - 3x^5/40 - 5x^7/112 - 35x^9/1152
+	return ret;
+}
+
+///input : if input is negative, use this function
+//arccos x return always positive
+struct gps_float acos_neg_gps_float(struct gps_float *x)
+{
+	struct gps_float ret;
+	struct gps_float term = *x;
+	struct gps_float power_tmp, factor_tmp;
+	struct gps_float mul;
+	if (x->integer < 0)
+		set_gps_float(x, -(x->integer), x->decimal);
+
+	ret = HALF_PI;
+	
+	power_tmp = power_gps_float(x, 1);
+	set_gps_float(&factor_tmp, 1, 0);
+	term = div_gps_float(&power_tmp, &factor_tmp);		// x
+	
+	ret = add_gps_float(&ret, &term);			// pi/2 + x 
+	
+	power_tmp = power_gps_float(x, 3);			// x^3
+	set_gps_float(&factor_tmp, 6, 0);
+	term = div_gps_float(&power_tmp, &factor_tmp);		// x^3/6
+
+	ret = add_gps_float(&ret, &term);			//pi/2 + x + x^3/6
+
+	power_tmp = power_gps_float(x, 5);			// x^5
+	set_gps_float(&factor_tmp, 40, 0);			// 40
+	set_gps_float(&mul, 3, 0);				// 3
+	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 40/3
+	term = div_gps_float(&power_tmp, &factor_tmp);		// 3x^5/40
+
+	ret = add_gps_float(&ret, &term);			// pi/2 + x + x^3/6 + 3x^5/40
+
+	power_tmp = power_gps_float(x, 7);			// x^7
+	set_gps_float(&factor_tmp, 112, 0);			// 112
+	set_gps_float(&mul, 5, 0);				//5
+	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 112/5
+	term = div_gps_float(&power_tmp, &factor_tmp);		// 5x^7/112
+
+	ret = add_gps_float(&ret, &term);			// pi/2 + x + x^3/6 + 3x^5/40 + 5x^7/112
+
+	power_tmp = power_gps_float(x, 9);			// x^9
+	set_gps_float(&factor_tmp, 1152, 0);			// 1152
+	set_gps_float(&mul, 35, 0);				//35
+	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 1152/35
+	term = div_gps_float(&power_tmp, &factor_tmp);		// 35x^9/1152
+
+	ret = add_gps_float(&ret, &term);			// pi/2 + x + x^3/6 + 3x^5/40 + 5x^7/112 + 35x^9/1152
+	return ret;
+}
+
+
 void print_curr_loc(void)
 {
 	printk("====== curr_loc fields =====\n");
@@ -447,6 +519,7 @@ void test_cal(int integer_x, int decimal_x, int integer_y, int decimal_y)
 	c = div_gps_float(&a, &b);
 	printk("div = %lld.%lld\n", c.integer, c.decimal);
 	*/
+	/*
 	rad = degree2rad(&a);
 	printk("rad = %lld.%lld\n", rad.integer,rad.decimal);
 	c = abs_sin_gps_float(&rad);
@@ -454,6 +527,12 @@ void test_cal(int integer_x, int decimal_x, int integer_y, int decimal_y)
 	
 	c = abs_cos_gps_float(&rad);
 	printk("cos = %lld.%lld\n", c.integer, c.decimal);
+	*/
+	c = acos_pos_gps_float(&a);
+	printk("acos positive case = %lld.%lld\n", c.integer, c.decimal);
+	
+	c = acos_neg_gps_float(&a);
+	printk("acos negative case = %lld.%lld\n", c.integer, c.decimal);
 
 }
 
@@ -502,6 +581,8 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	test_cal(135, 0, 1, 1);
 	test_cal(45, 0, 1, 1);
 	*/
+	test_cal(0, 300000, 1,1);
+	test_cal(0, 540000, 1, 1);
 	return 0;
 }
 

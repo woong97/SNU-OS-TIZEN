@@ -1,21 +1,200 @@
-### ext2_set_gps_location
-- fs/attr.c notify_chane : 파일이 수정될때 location 기록
-- fs/ext2/namei.c : 파일이 생성될 때 location 기록
+# [Project 4] Team 8 implementation document
+## 1. Data Structure
+### 1.1 gps_location
+- inlude/linux/gps.h에 정의
+- gps 위치 information을 담은 구조체로 각 위도, 경도의 정수, 소수 파트를 field로 가지고, accuracy도 field로 갖는다
+```C
+struct gps_location {
+	int lat_integer;
+	int lat_fractional;
+	int lng_integer;
+	int lng_fractional;
+	int accuracy;
+};
+```
+### 1.2 Customized floating point
+- kernel/gps.c에 정의 : kernel에서는 floating 타입이 없기 때문에 연산을 위해 아래같이 구조체를 만들어 아래의 구조체가 float라 생각한다
+- 아래 구조체에 대한 operation 들을 정의해줘야 gps_float 구조체 간에 연산이 가능해진다.
+```C
+struct gps_float {
+	long long integer;
+	long long decimal;
+};
+```
 
--fs/ext2/ialloc.c ext2_new_inode do we need?
--fs/ext2/inode.c setsize do we need?
+### 1.3 ext2_inode, ext2_inode_info 구조체
+- fs/ext2/ext2.h 에 정의
+- 두 구조체 다 indode에 어떤 정보들이 들어가야 하는지 정의 돼 있다. 우리는 이제 파일에 대해 파일이 만들어질 때의 gps location 정보도 추가할 것이기 때문에 이 구조체들에 추가해줘야 한다
+
+```C
+struct ext2_inode {
+ ... 생략 ...
+ __le32	i_lat_integer;
+ __le32	i_lat_fractional;
+ __le32	i_lng_integer;
+ __le32	i_lng_fractional;
+ __le32	i_accuracy;
+};
+
+struct ext2_inode_info {
+ ... 생략 ...
+ __u32	i_lat_integer;
+ __u32	i_lat_fractional;
+ __u32	i_lng_integer;
+ __u32	i_lng_fractional;
+ __u32	i_accuracy;
+};
+```
+
+### 1.4 struct file_operations ext2_file_operations
+- fs/ext2/file.c 에 정의
+- file_operations 구조체는 각 파일시스템별로 사용할 operations 구조체이며, 파일이 생성되고 수정되고 삭제되고 등등 파일과 관련된 작업에서, 파일이 속해 있는 파일 시스템에 맞는 operation들을 호출하게 되는데 이 operation들을 이 구조체 필드에 정의해준다
+- proj2 scheduler에서 했던 작업과 비슷하다
+- gps 위치를 set, get 할수 있는 method, file permission에 대한 mehtod를 추가해준다. 이 method들은 fs/ext2/inode.c에서 구현한다
+```C
+const struct file_operations ext2_file_operations = {
+ ... 생략 ...
+ .set_gps_location = ext2_set_gps_location,
+ .get_gps_location = ext2_get_gps_location,
+ .permission	= ext2_permission,
+};
+```
+## 2. Implementation
+- 구현 순서에 맞춰 sys_set_gps_location -> ext2_set_gps_location -> ext2_get_gps_location -> sys_get_gps_location 순서로 설명한다
+### 2.1 sys_set_gps_location 
+- 시스템 콜 추가하는 방식은 생략한다.
+- 현재 커널의 current gps locaiton을 set 하는 시스템 콜이다. 실행환경에서 가장 이 시스템콜을 호출하는 ./gpsupdate 실행파일을 가장 먼저 실행시킨다.
+- shared variable curr_loc을 위해 mutex를 설정해준다.
+- user 영역의 gps_location 구조체를 커널 영역으로 copy 해주고, mutex를 잡은 뒤 curr_loc에 각각의 필드의 값들을 넣어준다
 
 
-### Operations
-- Arithmetic
-- Taylor series
-![image](https://user-images.githubusercontent.com/60849888/144707391-439163cb-4501-4e0c-a0a0-fd7b6f1c8b3b.png)
+### 2.2 ext2_set_gps_location, ext2_get_gps_location
+- fs/ext2/inode.c에 구현
+
+```C
+int ext2_set_gps_location(struct inode *inode);
+int ext2_get_gps_location(struct inode *inode, struct gps_location *loc);
+```
+- ext2_set_gps_location은 input inode에 current gps location 정보를 copy 해준다. 이때도 mutex를 사용해준다. 파일이 생성되고, 수정될 때마다 이 함수가 호출되어야 한다.
+- 파일이 생성될 때를 위해, fs/ext2/namei.c ext2_create 함수 안에서, 파일이 수정될 때를 위해 fs/attr.c notify_change 함수 안에서 호출해준다. 각각의 함수 내에서 아래와 같이 호출해주면 된다.
+- (확인!!!) fs/ext2/ialloc.c ext2_new_inode do we need?
+- (확인!!!) fs/ext2/inode.c setsize do we need?
+
+```C
+if (inode->i_op->set_gps_location)
+		error = inode->i_op->set_gps_location(inode);
+```
+- ext2_get_gps_locationd은 parameter gps_location 구조체 bufffer에 원하는 파일(inode)에서 gps location 정보를 copy 해준다. 이 함수는 sys_get_gps_location 시스템콜 함수에서 호출될 예정이다.
+
+- 추가로 중요한 부분은, inode object를 가져와주는 ext2_iget 메소드와 inode를 write해주는 __ext2_write_inode 수정해줘야 된다는 점이다. big endian, little endian 어느 환경에서든 데이터가 제대로 읽힐 수 있게 처리해주는게 중요하다
+- inode를 읽을 떄는 le32_to_cpu 함수를 호출해주고, indoe를 write 할 때는 cpu_to_le32를 사용해준다. 우리가 ext_inode 구조체에서 location 관련 field를 le32로 정의해줬기 떄문이다
+```C
+ex) ei->i_lat_integer = le32_to_cpu(raw_inode->i_lat_integer); // In ext2_iget
+ex) raw_inode->i_lat_integer = cpu_to_le32(ei->i_lat_integer); // In __ext2_write_inode
+```
+
+### 2.3 ext2_permission, sys_get_gps_location, 
+- 파일의 gps location을 get 하는 시스템 콜을 구현한다. 이 함수 안에서 파일에 접근할 수 있는지 permission 체크를 해줘야 한다. 이 시스템 콜 함수에서 inode_permission 함수를 호출할 것인데 이 함수에서, 위에서 ext2_file_operations 구조체에 추가해준 .permission 필드에 해당하는 ext_permission 함수를 호출한다.
+- inode_permission (fs/namei.c) -> __inode_permision (fs/namei.c) -> do_inode_permission (fs/namei.c) -> ext2_permission (fs/ext2/inode.c)
+```C
+static inline int do_inode_permission(struct inode *inode, int mask)
+{
+	if (unlikely(!(inode->i_opflags & IOP_FASTPERM))) {
+		if (likely(inode->i_op->permission))
+			return inode->i_op->permission(inode, mask);
+
+		/* This gets set once for the inode lifetime */
+		spin_lock(&inode->i_lock);
+		inode->i_opflags |= IOP_FASTPERM;
+		spin_unlock(&inode->i_lock);
+	}
+	return generic_permission(inode, mask);
+}
+```
+- gps_distance_permission 함수는 현재 커널의 gps location과 파일의 gps location이 가까운지 아닌지 계산해주는 함수이다. 이 함수에 대한 자세한 설명은 뒤에서 설명한다.
+```C
+int ext2_permission(struct inode *inode, int mask)
+{
+	if(gps_distance_permission(inode) < 0)
+		return -EACCES;
+	return generic_permission(inode, mask);
+}
+```
+- sys_get_gps_location 에서는 path를 통해 file inode object를 가져오고, inode_permission을 호출하여 gps location을 계산한뒤 permission을 통과하면 ext_get_gps_location을 통해 get 해온 location 정보를 user space input parameter로 copy_to_user 해준다. 
+```C
+long sys_get_gps_location(const char __user *pathname, struct gps_location __user *loc)
+{
+	... 생략 ...
+ 
+	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
+	if (error)
+		return error;
+	inode = path.dentry->d_inode;
+
+	if (inode_permission(inode, MAY_READ)) {
+		printk("Permission Denied\n");
+		return -EACCES;
+	}
+	
+	if (inode->i_op->get_gps_location) {
+		inode->i_op->get_gps_location(inode, &kernel_buf);
+	} else {
+		return -EOPNOTSUPP;
+	}
+ 
+	if(copy_to_user(loc, &kernel_buf, sizeof(struct gps_location) != 0))
+		return -EFAULT;
+	return 0;
+}
+```
+- gps_haversine_distance 함수를 통해, file location과 kernel current location의 거리를 구한뒤 이 거리가 각각의 accuracy의 합보다 작으면 permission을 통과시키고, 그렇지 않다면 permission denied가 된다.
+```C
+/// Permission denied: return -1, Succeed: return 0
+int gps_distance_permission(struct inode *inode)
+{
+	struct gps_location file_loc;
+	struct gps_float distance, accuracy;
+	if (inode->i_op->get_gps_location) {
+		inode->i_op->get_gps_location(inode, &file_loc);
+	}
+	distance = gps_haversine_distance(file_loc);
+	set_gps_float(&accuracy, curr_loc.accuracy + file_loc.accuracy, 0);
+
+	if (comp_gps_float(&accuracy, &distance) >= 0) {
+		return 0;
+	} else {
+		return -1;
+	}
+}
+```
+
+### 2.4 Arimetric Operations & Trigonometric Functions
+- add, sub, mult, div를 구현해준다. gps_location 구조체 방식의 문제점은 -1과 0 사이의 음수를 다를 수 없다는 점이다. -0 = 0 이기 때문에 -0.xxx를 표현할 방법이 없다. 따라서 이는 연산에 있어서 큰 문제가 된다. 처음에는 이 음수들을 다 고려해서 구현을 하였지만, 결국 이 함수들을 호출하는 곳에서 input이 -1에서 0 사이의 음수인지 확인을 해줘야 된다는 점 때문에, 오히려 복잡해진 다는 것을 꺠달았다. 따라서 이 기본 사칙 연산은 무조건 input 값들이 양수라고 가정하고 구현하였고, 이 함수를 호출하는 곳에서 input이 음수인지 양수인지를 handling 해주기로 하였다. 또한 sub를 호출할 때는 반드시 첫번째 paramenter가 두번째 parameter 보다 반드시 크다는 가정을 하였다.
+- factorial, power, degree2rad를 구현해준다.
+- cos, sin, arccos 삼각함수를 구현한다. 이 삼각함수를 쉽게 구현하기 위해, global variable로, gps_float type의 pi, pi/180, 1, 0, 1/2를 선언해주었다.
+- 삼각함수들은 talyor series를 통한 근사식을 구현해준다. arccos의 경우 x가 1에 가까우면 실제 값과 근사값의 오차가 여전히 크게 나타난다. 또 이 최종 arccos 값이 지구의 반지름과 곱해지는 결과값이 두 점사이의 거리이기 때문에, 오차가 굉장히 중요하다. 그래서 arccos의 경우 9개의 항까지 근사하였다
+ 
+![image](https://user-images.githubusercontent.com/60849888/144718566-ccec63d2-046a-4b62-bf98-6d0dc923b4dc.png)
+
+- 삼각함수 구현부를 보면 아래와 같은 모습들을 많이 찾을 수 있다. 삼각함수 연산에서는 -1과 0사이의 값이 계속 나타나고 위에서 설명하였듯이 이것을 handling 하는 것이 중요하다. 또한 sub 함수에서 반드시 lvalue가 rvalue보다 크다는 강제조항이 있기 때문에 아래와 같이 계속 handling 해줘야 한다. 
+```C
+term = div_gps_float(&power_tmp, &factorial_tmp);		// x^3/3!
+if (comp_gps_float(&ret, &term) >= 0) {
+		ret = sub_gps_float(&ret, &term);			// x-x^3/3!
+  ... 생략 ...
+} else if(comp_gps_float(&ret, &term) == -1) {
+		ret = sub_gps_float(&term, &ret);
+  ... 생략 ...
+```
 
 
-### haversine distance
+### 2.5 Haversine distance
+- 구면에서 두 점의 latitude, longtitude를 통해 distance를 구하는 공식으로 아래를 참고하였다. 파이썬 라이브러리 코드를 확인할 수 있는데, 아래 로직을 그대로 kernel/gps.c에 구현했다.
+- 여기서 중요한 점은, 우리는 square root가 구현돼 있지 않기 떄문에, arcsin 대신 arccos을 사용해준다. 공식의 변환은 아래의 수식을 통해 확인할 수 있다. 
 - ref: https://en.wikipedia.org/wiki/Haversine_formula
 - ref: python haversine package function
 ```C
+# python logic
 lat1, lng1 = point1
 lat2, lng2 = point2
 
@@ -32,6 +211,13 @@ harv_d = sin(lat * 0.5) ** 2 + cos(lat1) * cos(lat2) * sin(lng * 0.5) ** 2
 
 return 2 * get_avg_earth_radius(unit) * asin(sqrt(harv_d))
 ```
-
+- 기본 logic은 위 python code를 따르지만 arccos을 사용하기 위해 아래와 같은 식을 kernel/gps.c gps_haversine_distance 메소드로 그대로 구현했다. 
 ![image](https://user-images.githubusercontent.com/60849888/144707258-2aab5d37-07ef-418e-8325-22c91e2e9846.png)
 
+
+## 3. Test
+
+## 4. Lessons learned
+- 파일이 어떻게 관리되는지는 늘 궁금해왔던 것인데, 이번 랩을 계기로 커널 파일시스템을 살펴보면서 어떻게 파일, Inode가 관리되는지 배울 수 있어서 뜻깊은 시간이었다.
+- abstraction의 핵심이 어떤 cpu 환경에서도 잘 돌아가게끔 만드는 것이라 생각하는데, endian에 상관없이 이런식으로 처리한다는 점이 매우 흥미로웠다, 
+- 지금까지의 모든 랩들이, 다 뜻깊고 도움이 됐는데, 마지막 과제라는 점이 아쉬웠다. 커널이 너무 방대하여 이것들을 다 살펴볼 수 없다는게 아쉽다. 여전히 운영체제에 대한 궁금한 점이 많은데 다른 주제를 가진 랩들이 더 많은 대신 운영체제 2 과목이 있으면 좋겠다는 생각이 들었다. 

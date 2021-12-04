@@ -5,6 +5,13 @@
 -fs/ext2/ialloc.c ext2_new_inode do we need?
 -fs/ext2/inode.c setsize do we need?
 
+
+### Operations
+- Arithmetic
+- Taylor series
+![image](https://user-images.githubusercontent.com/60849888/144707391-439163cb-4501-4e0c-a0a0-fd7b6f1c8b3b.png)
+
+
 ### haversine distance
 - ref: https://en.wikipedia.org/wiki/Haversine_formula
 - ref: python haversine package function

@@ -21,8 +21,10 @@ lng2 = radians(lng2)
 # calculate haversine
 lat = lat2 - lat1
 lng = lng2 - lng1
-d = sin(lat * 0.5) ** 2 + cos(lat1) * cos(lat2) * sin(lng * 0.5) ** 2
+harv_d = sin(lat * 0.5) ** 2 + cos(lat1) * cos(lat2) * sin(lng * 0.5) ** 2
 
-return 2 * get_avg_earth_radius(unit) * asin(sqrt(d))
+return 2 * get_avg_earth_radius(unit) * asin(sqrt(harv_d))
 ```
-- use sin(theta/2) ^ 2 = (1-cos(theta/))/2
+
+![image](https://user-images.githubusercontent.com/60849888/144707258-2aab5d37-07ef-418e-8325-22c91e2e9846.png)
+

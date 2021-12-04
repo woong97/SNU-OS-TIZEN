@@ -26,4 +26,3 @@ d = sin(lat * 0.5) ** 2 + cos(lat1) * cos(lat2) * sin(lng * 0.5) ** 2
 return 2 * get_avg_earth_radius(unit) * asin(sqrt(d))
 ```
 - use sin(theta/2) ^ 2 = (1-cos(theta/))/2
-

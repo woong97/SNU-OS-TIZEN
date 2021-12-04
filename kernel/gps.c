@@ -16,7 +16,6 @@ struct gps_location {
 */
 #define MAX_FRAC		999999
 #define DECIMAL_MAX		(MAX_FRAC + 1)
-#define AVG_EARTH_RADIUS	6371009
 
 
 DEFINE_MUTEX(gps_lock);
@@ -32,6 +31,11 @@ struct gps_location curr_loc = {
 struct gps_float {
 	long long integer;
 	long long decimal;
+};
+
+struct gps_float AVG_EARTH_RADIUS = {
+	.integer = 637101,
+	.decimal = 0
 };
 
 struct gps_float PI = {
@@ -55,9 +59,19 @@ struct gps_float ONE = {
 	.decimal = 0
 };
 
+struct gps_float TWO = {
+	.integer = 2,
+	.decimal = 0
+};
+
 struct gps_float ZERO = {
 	.integer = 0,
 	.decimal = 0
+};
+
+struct gps_float HALF = {
+	.integer = 0,
+	.decimal = 500000
 };
 
 void set_gps_float(struct gps_float *gf, long long integer, long long decimal)
@@ -87,28 +101,6 @@ struct gps_float __pure_sub_gps_float(struct gps_float *a, struct gps_float *b)
 	return ret;
 }
 
-
-/*struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
-{
-	struct gps_float ret, tmp;
-	long long integer, decimal;
-	if ((a->integer >= 0 && b->integer >= 0)) {
-		decimal = (a->decimal + b->decimal) % DECIMAL_MAX;
-		integer = a->integer + b->integer + (a->decimal + b->decimal) / DECIMAL_MAX;
-		set_gps_float(&ret, integer, decimal);
-	} else if (a->integer >= 0 && b->integer < 0) {
-		set_gps_float(&tmp, -(b->integer), b->decimal);
-		ret = __pure_sub_gps_float(a, &tmp);
-	} else if (a->integer < 0 && b->integer >=0) {
-		set_gps_float(&tmp, -(a->integer), a->decimal);
-		ret = __pure_sub_gps_float(b, &tmp);
-	} else if (a->integer < 0 && b->integer < 0) {
-		decimal = (a->decimal + b->decimal) % DECIMAL_MAX;
-		integer = -((-a->integer) + (-b->integer) + (a->decimal + b->decimal) / DECIMAL_MAX); 
-		set_gps_float(&ret, integer, decimal);
-	}
-	return ret;
-}*/
 struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
 {
 	struct gps_float ret;
@@ -125,7 +117,7 @@ struct gps_float add_gps_float(struct gps_float *a, struct gps_float *b)
 struct gps_float sub_gps_float(struct gps_float *a, struct gps_float *b)
 {
 	struct gps_float ret;
-	int integer, decimal;
+	long long integer, decimal;
 	if (a->decimal < b->decimal) {
 		decimal = DECIMAL_MAX + a->decimal - b->decimal;
 		integer = a->integer - b->integer - 1;
@@ -543,8 +535,8 @@ static int is_valid_input(struct gps_location *loc)
 	int lng_integer = loc->lng_integer;
 	int lng_fractional = loc->lng_fractional;
 	int accuracy = loc->accuracy;
-	long latitude = lat_integer * DECIMAL_MAX + lat_fractional; 
-	long longtitude = lng_integer * DECIMAL_MAX + lng_fractional;
+	long long latitude = lat_integer * DECIMAL_MAX + lat_fractional; 
+	long long longtitude = lng_integer * DECIMAL_MAX + lng_fractional;
 	if (lat_fractional < 0 || lng_fractional < 0 || lat_fractional > MAX_FRAC || lng_fractional > MAX_FRAC)
 		return -1;
 	if ((latitude < -90 * DECIMAL_MAX) || (latitude > 90 * DECIMAL_MAX))
@@ -590,7 +582,77 @@ long sys_set_gps_location(struct gps_location __user *loc)
 int gps_distance_permission(struct inode *inode)
 {
 	// TODO
-	return 0;
+	struct gps_location file_loc;
+	struct gps_float lat1, lng1;			// file gps position
+	struct gps_float lat2, lng2;			// current gps position
+	struct gps_float lat, lng;			// difference of src and target position
+	struct gps_float cos_lat1, cos_lat2;
+	struct gps_float harv;
+	struct gps_float tmp;
+	struct gps_float distance, accuracy;
+
+	struct gps_float lval, rval;
+
+	if (inode->i_op->get_gps_location) {
+		inode->i_op->get_gps_location(inode, &file_loc);
+	}
+
+	set_gps_float(&accuracy, curr_loc.accuracy + file_loc.accuracy, 0);
+	
+	set_gps_float(&lat1, file_loc.lat_integer, file_loc.lat_fractional);
+	set_gps_float(&lng1, file_loc.lng_integer, file_loc.lng_fractional);
+	set_gps_float(&lat2, curr_loc.lat_integer, curr_loc.lat_fractional);
+	set_gps_float(&lng2, curr_loc.lng_integer, curr_loc.lng_fractional);
+
+	lat1 = degree2rad(&lat1);
+	lng1 = degree2rad(&lng1);
+	lat2 = degree2rad(&lat2);
+	lng2 = degree2rad(&lng2);
+	
+	if (comp_gps_float(&lat2, &lat1) >= 0) {
+		lat = sub_gps_float(&lat2, &lat1);
+	} else {
+		lat = sub_gps_float(&lat1, &lat2);
+	}
+	
+	if (comp_gps_float(&lng2, &lng1) >= 0) {
+		lng = sub_gps_float(&lng2, &lng1);
+	} else {
+		lng = sub_gps_float(&lng1, &lng2);
+	}
+	
+	lval = mul_gps_float(&lat, &HALF);		// lat * 0.5
+	lval = abs_sin_gps_float(&lval);		// sin(lat * 0.5)
+	lval = mul_gps_float(&lval, &lval);		// sin(lat * 0.5) ** 2;
+	
+	rval = mul_gps_float(&lng, &HALF);		// lng * 0.5
+	rval = abs_sin_gps_float(&rval);		// sin(lng * 0.5)
+	rval = mul_gps_float(&rval, &rval);		// sin(lng * 0.5) ** 2;
+
+	// fortunaltey latitued is always in [-90, 90] that means cosine vlaue is positive!
+	cos_lat1 = abs_cos_gps_float(&lat1);		// cos(lat1)
+	cos_lat2 = abs_cos_gps_float(&lat2);		// cos(lat2)
+
+	rval = mul_gps_float(&rval, &cos_lat1); 	// sin(lng * 0.5) ** 2 * cos(lat1);
+	rval = mul_gps_float(&rval, &cos_lat2);		// sin(lng * 0.5) ** 2 * cos(lat1) * cos(lat2);
+	
+	harv = add_gps_float(&lval, &rval);		// sin(lng * 0.5) ** 2 + cos(lat1) * cos(lat2) * sin(lng * 0.5) ** 2
+	tmp = mul_gps_float(&harv, &TWO);		// 2 * harv
+	if (comp_gps_float(&ONE, &tmp) >= 0) {
+		tmp = sub_gps_float(&ONE, &tmp);	// 1-2*harv is positive
+		tmp = acos_pos_gps_float(&tmp);		// acos(1-2*harv);
+	} else {
+		tmp = sub_gps_float(&tmp, &ONE);	// 1-2*harv is negative. so we calculate 2*harv - 1
+		tmp = acos_neg_gps_float(&tmp);		// since 1-2*harv is originally negative, use acos_neg_gps_float
+	}
+	
+	distance = mul_gps_float(&AVG_EARTH_RADIUS, &tmp);	// R * acos(1 - 2*harv)
+
+	if (comp_gps_float(&accuracy, &distance) >= 0) {
+		return 0;
+	} else {
+		return -1;
+	}
 }
 
 long sys_get_gps_location(const char __user *pathname, struct gps_location __user *loc)

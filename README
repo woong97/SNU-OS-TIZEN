@@ -4,3 +4,26 @@
 
 -fs/ext2/ialloc.c ext2_new_inode do we need?
 -fs/ext2/inode.c setsize do we need?
+
+### haversine distance
+- ref: https://en.wikipedia.org/wiki/Haversine_formula
+- ref: python haversine package function
+```C
+lat1, lng1 = point1
+lat2, lng2 = point2
+
+# convert all latitudes/longitudes from decimal degrees to radians
+lat1 = radians(lat1)
+lng1 = radians(lng1)
+lat2 = radians(lat2)
+lng2 = radians(lng2)
+
+# calculate haversine
+lat = lat2 - lat1
+lng = lng2 - lng1
+d = sin(lat * 0.5) ** 2 + cos(lat1) * cos(lat2) * sin(lng * 0.5) ** 2
+
+return 2 * get_avg_earth_radius(unit) * asin(sqrt(d))
+```
+- use sin(theta/2) ^ 2 = (1-cos(theta/))/2
+

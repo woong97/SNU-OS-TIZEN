@@ -9,7 +9,9 @@
 ### Operations
 - Arithmetic
 - Taylor series
-![image](https://user-images.githubusercontent.com/60849888/144707391-439163cb-4501-4e0c-a0a0-fd7b6f1c8b3b.png)
+ 
+![image](https://user-images.githubusercontent.com/60849888/144718566-ccec63d2-046a-4b62-bf98-6d0dc923b4dc.png)
+
 
 
 ### haversine distance

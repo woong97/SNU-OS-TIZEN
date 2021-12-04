@@ -305,7 +305,6 @@ struct gps_float abs_sin_gps_float(struct gps_float *x)
 		factorial_tmp = factorial_gps_float(5);
 		term = div_gps_float(&power_tmp, &factorial_tmp);	// x^5/5!
 		if (comp_gps_float(&ret, &term) >= 0) {
-			printk("here1\n");
 			ret = sub_gps_float(&ret, &term);		// originally negative
 			
 			power_tmp = power_gps_float(x, 7);
@@ -598,15 +597,16 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	curr_loc.lng_fractional = buf_loc.lng_fractional;
 	curr_loc.accuracy = buf_loc.accuracy;
 	mutex_unlock(&gps_lock);
-	print_curr_loc();
+	// print_curr_loc();
 	/*
 	test_cal(90, 0, 42, 0);
 	test_cal(-60, 0, 1, 1);
 	test_cal(135, 0, 1, 1);
 	test_cal(45, 0, 1, 1);
-	*/
+	
 	test_cal(48, 856700, 2, 350800);
 	test_cal(45, 759722, 123, 100000);
+	*/
 	return 0;
 }
 
@@ -622,11 +622,6 @@ struct gps_float gps_haversine_distance(struct gps_location file_loc)
 
 	struct gps_float lval, rval;
 	
-	printk("==== curr lat: %d.%d\n", curr_loc.lat_integer, curr_loc.lat_fractional);
-	printk("==== curr lng: %d.%d\n", curr_loc.lng_integer, curr_loc.lng_fractional);
-	printk("==== file lat: %d.%d\n", file_loc.lat_integer, file_loc.lat_fractional);
-	printk("==== file lng: %d.%d\n", file_loc.lng_integer, file_loc.lng_fractional);
-
 	set_gps_float(&lat1, file_loc.lat_integer, file_loc.lat_fractional);
 	set_gps_float(&lng1, file_loc.lng_integer, file_loc.lng_fractional);
 	set_gps_float(&lat2, curr_loc.lat_integer, curr_loc.lat_fractional);
@@ -668,14 +663,10 @@ struct gps_float gps_haversine_distance(struct gps_location file_loc)
 	tmp = mul_gps_float(&harv, &TWO);		// 2 * harv
 	if (comp_gps_float(&ONE, &tmp) >= 0) {
 		tmp = sub_gps_float(&ONE, &tmp);	// 1-2*harv is positive
-		printk("first befpre acos: %lld.%lld\n", tmp.integer, tmp.decimal);
 		tmp = acos_gps_float(&tmp, ACOS_POS);		// acos(1-2*harv); use ACOS_POS as flag
-		printk("first after acos: %lld.%lld\n", tmp.integer, tmp.decimal);
 	} else {
 		tmp = sub_gps_float(&tmp, &ONE);	// 1-2*harv is negative. so we calculate 2*harv - 1
-		printk("second befpre acos: %lld.%lld\n", tmp.integer, tmp.decimal);
 		tmp = acos_gps_float(&tmp, ACOS_NEG);		// since 1-2*harv is originally negative, use ACOS_NEG as flag
-		printk("second after acos: %lld.%lld\n", tmp.integer, tmp.decimal);
 
 	}
 	

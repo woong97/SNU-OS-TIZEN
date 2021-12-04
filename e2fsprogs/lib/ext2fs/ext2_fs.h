@@ -444,12 +444,11 @@ struct ext2_inode {
 			__u32	h_i_author;
 		} hurd2;
 	} osd2;				/* OS dependent 2 */
-
-	__u32 i_lat_integer;
-	__u32 i_lat_fractional;
-	__u32 i_lng_integer;
-	__u32 i_lng_fractional;
-	__u32 i_accuracy;
+	__u32	i_lat_integer;
+	__u32	i_lat_fractional;
+	__u32	i_lng_integer;
+	__u32	i_lng_fractional;
+	__u32	i_accuracy;
 };
 
 /*

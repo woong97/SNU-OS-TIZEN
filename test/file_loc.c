@@ -8,12 +8,24 @@
 int main(int argc, char *argv[]) {
 	int retval;
 	struct gps_location loc;
+	if (argc != 2) {
+		printf("Input shuld be ./file_loc <filepath>\n");
+	} else {
+		exit(EXIT_FAILURE);
+	}
 
-	// TODO
-	char *path = "testpath";
-	if ((retval = syscall(SYSCALL_GET_GPS_LOCATION, path, &loc)) < 0) {
+	if ((retval = syscall(SYSCALL_GET_GPS_LOCATION, argv[1], &loc)) < 0) {
 		printf("sys_set_gps_location failed\n");
 		exit(EXIT_FAILURE);
 	}
+	
+	printf("File %s location\n", argv[1]);
+	printf("=> latitude : %d.%06d\n", loc.lat_integer, loc.lat_fractional);
+	printf("=> longtitude : %d.%06d\n", loc.lng_integer, loc.lng_fractional);
+	printf("-> accuracy : %d\n\n", loc.accuracy);
+
+	printf("Google Map Link: https://www.google.co.kr/maps/search/%d.%06d+%d.%06d\n",
+			loc.lat_integer, loc.lat_fractional, loc.lng_integer, loc.lng_fractional);
+
 	return EXIT_SUCCESS;
 }

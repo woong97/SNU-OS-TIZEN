@@ -14,7 +14,7 @@ struct gps_location {
 	int accuracy;
 };
 */
-#define MAX_FRAC		999999
+#define MAX_FRAC		 999999
 #define DECIMAL_MAX		(MAX_FRAC + 1)
 #define ACOS_POS		1
 #define ACOS_NEG		0
@@ -243,6 +243,8 @@ struct gps_float power_gps_float(struct gps_float *x, int power)
 {
 	int i;
 	struct gps_float ret = ONE;
+	if (power == 0)
+		return ONE;
 	for (i = 0; i < power ; i++) {
 		ret = mul_gps_float(&ret, x);
 	}
@@ -254,10 +256,24 @@ struct gps_float factorial_gps_float(int num)
 	struct gps_float ret = ONE;
 	struct gps_float mul;
 	int i;
+	if (num <= 1) {
+		return ret;
+	}
 	for (i = 1; i <= num; i++) {
 		set_gps_float(&mul, i, 0);
 		ret = mul_gps_float(&ret, &mul);
 	}
+	return ret;
+}
+
+long long pure_factorial(int num)
+{
+	long long ret = 1;
+	int i;
+	if (num == 0)
+		return ret;
+	for(i = 1; i <= num; i++)
+		ret = ret * i;
 	return ret;
 }
 
@@ -269,10 +285,8 @@ struct gps_float degree2rad(struct gps_float *x)
 
 struct gps_float abs_sin_gps_float(struct gps_float *x)
 {
-	// int integer, decimal;
 	struct gps_float ret;
 	struct gps_float term;
-	// int factorial;
 	struct gps_float power_tmp, factorial_tmp;
 	if (x->integer < 0)
 		set_gps_float(x, -(x->integer), x->decimal);
@@ -385,120 +399,77 @@ struct gps_float abs_cos_gps_float(struct gps_float *x)
 
 }
 
-
 ///input : if input is negative, use this function
 //arccos x return always positive
-struct gps_float acos_gps_float(struct gps_float *x, int acos_flag)
-{
+struct gps_float acos_gps_float(struct gps_float *x, int acos_flag) {
 	struct gps_float ret;
 	struct gps_float term = *x;
-	struct gps_float power_tmp, factor_tmp;
-	struct gps_float mul;
+	struct gps_float power_tmp, factorial_tmp;
+	struct gps_float mul_tmp, div_tmp;
+	struct gps_float odd_tmp;
+	struct gps_float acos_factors[40];
+	
+	int acos_decimals[40] = {11552, 9761, 8390, 7313, 6447, 5740, 5153, 4660, 4241, 3881, 
+				  3569, 3297, 3058, 2846, 2658, 2489, 2338, 2201, 2078, 1965, 
+				  1862, 1768, 1682, 1602, 1528, 1460, 1397, 1338, 1284, 1233, 
+				  1185, 1140, 1098, 1058, 1021,  986,  953,  922,  892,  864}; //after 837
+	
+	//int acos_decimals[20] = {11552, 9761, 8390, 7313, 6447, 5740, 5153, 4660, 4241, 3881, 3569,
+	//				 3297, 3058, 2846, 2658, 2489, 2338, 2201, 2078, 1965};
+	
+	int i;
+
+	if (comp_gps_float(&ONE, x) == 0 && acos_flag == ACOS_POS)
+		return ZERO;
+
+	for (i = 0; i < 40; i++) {
+		acos_factors[i].integer = 0;
+		acos_factors[i].decimal = acos_decimals[i];
+	}
+
 	if (x->integer < 0)
 		set_gps_float(x, -(x->integer), x->decimal);
 
 	ret = HALF_PI;
-	
-	power_tmp = power_gps_float(x, 1);
-	set_gps_float(&factor_tmp, 1, 0);
-	term = div_gps_float(&power_tmp, &factor_tmp);		// x
-	
-	// pi/2 - x	
-	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);	
-	} else {
-		ret = add_gps_float(&ret, &term);
+	for (i = 0; i <= 7; i++) {
+		power_tmp = power_gps_float(x, 2 * i + 1);		// x^(2n+1)
+		mul_tmp = factorial_gps_float(2 * i);			// (2n)!
+		mul_tmp = mul_gps_float(&mul_tmp, &power_tmp);		// (2n)! * x^(2n+1)
+		
+		div_tmp = power_gps_float(&TWO, 2 * i);			// 2^(2n)
+		factorial_tmp = factorial_gps_float(i);			// n!
+		div_tmp = mul_gps_float(&factorial_tmp, &div_tmp);
+		div_tmp = mul_gps_float(&factorial_tmp, &div_tmp);	// 2^(2n) * (n!)^2
+		
+		set_gps_float(&odd_tmp, 2 * i + 1, 0);			// 2n+1
+
+		div_tmp = mul_gps_float(&div_tmp, &odd_tmp);		// 2^(2n) * (n!)^2 * (2n + 1)
+		
+		term = div_gps_float(&mul_tmp, &div_tmp);
+		if (acos_flag == ACOS_POS) {
+			ret = sub_gps_float(&ret, &term);		
+		} else {
+			ret = add_gps_float(&ret, &term);
+		}
+
 	}
-	
-	power_tmp = power_gps_float(x, 3);			// x^3
-	set_gps_float(&factor_tmp, 6, 0);
-	term = div_gps_float(&power_tmp, &factor_tmp);		// x^3/6
+	for (i = 0; i < 40; i++) {
+		power_tmp = power_gps_float(x, 2 * (8 + i) + 1);
+		mul_tmp = acos_factors[i];
+		term = mul_gps_float(&power_tmp, &mul_tmp);
+		if (acos_flag == ACOS_POS) {
+			ret = sub_gps_float(&ret, &term);		
+		} else {
+			ret = add_gps_float(&ret, &term);
+		}
 
-	// pi/2 - x - x^3/6
-	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);		
-	} else {
-		ret = add_gps_float(&ret, &term);
 	}
-
-	power_tmp = power_gps_float(x, 5);			// x^5
-	set_gps_float(&factor_tmp, 40, 0);			// 40
-	set_gps_float(&mul, 3, 0);				// 3
-	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 40/3
-	term = div_gps_float(&power_tmp, &factor_tmp);		// 3x^5/40
-
-	// pi/2 - x - x^3/6 - 3x^5/40
 	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);		
-	} else {
-		ret = add_gps_float(&ret, &term);
+		if (x->integer == 0 && x->decimal >= 995000)
+			ret = div_gps_float(&ret, &TWO);
 	}
-
-	power_tmp = power_gps_float(x, 7);			// x^7
-	set_gps_float(&factor_tmp, 112, 0);			// 112
-	set_gps_float(&mul, 5, 0);				//5
-	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 112/5
-	term = div_gps_float(&power_tmp, &factor_tmp);		// 5x^7/112
-
-	// pi/2 - x - x^3/6 - 3x^5/40 - 5x^7/112
-	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);		
-	} else {
-		ret = add_gps_float(&ret, &term);
-	}
-
-	power_tmp = power_gps_float(x, 9);			// x^9
-	set_gps_float(&factor_tmp, 1152, 0);			// 1152
-	set_gps_float(&mul, 35, 0);				//35
-	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 1152/35
-	term = div_gps_float(&power_tmp, &factor_tmp);		// 35x^9/1152
-
-	// pi/2 - x - x^3/6 - 3x^5/40 - 5x^7/112 - 35x^9/1152
-	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);		
-	} else {
-		ret = add_gps_float(&ret, &term);
-	}
-
-	power_tmp = power_gps_float(x, 11);			// x^9
-	set_gps_float(&factor_tmp, 2816, 0);			// 2816
-	set_gps_float(&mul, 63, 0);				//63
-	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 2816/63
-	term = div_gps_float(&power_tmp, &factor_tmp);		// 63x^11/2816
-
-	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);		
-	} else {
-		ret = add_gps_float(&ret, &term);
-	}
-
-	power_tmp = power_gps_float(x, 13);			// x^13
-	set_gps_float(&factor_tmp, 13312, 0);			// 13312
-	set_gps_float(&mul, 231, 0);				// 231
-	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 13312/231
-	term = div_gps_float(&power_tmp, &factor_tmp);		// 231x^13/13312
-
-	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);		
-	} else {
-		ret = add_gps_float(&ret, &term);
-	}
-	
-	power_tmp = power_gps_float(x, 15);			// x^15
-	set_gps_float(&factor_tmp, 10240, 0);			// 10240
-	set_gps_float(&mul, 143, 0);				// 143
-	factor_tmp = div_gps_float(&factor_tmp, &mul);		// 10240/143
-	term = div_gps_float(&power_tmp, &factor_tmp);		// 143x^15/10240
-
-	if (acos_flag == ACOS_POS) {
-		ret = sub_gps_float(&ret, &term);		
-	} else {
-		ret = add_gps_float(&ret, &term);
-	}
-
 	return ret;
 }
-
 
 void print_curr_loc(void)
 {
@@ -542,12 +513,14 @@ void test_cal(int integer_x, int decimal_x, int integer_y, int decimal_y)
 	c = abs_cos_gps_float(&rad);
 	printk("cos = %lld.%lld\n", c.integer, c.decimal);
 	*/
+
 	c = acos_gps_float(&a, ACOS_POS);
 	printk("acos positive case = %lld.%lld\n", c.integer, c.decimal);
-	
+		
 	c = acos_gps_float(&a, ACOS_NEG);
 	printk("acos negative case = %lld.%lld\n", c.integer, c.decimal);
-	
+
+
 	struct gps_location my = {
 		.lat_integer=a.integer,
 		.lat_fractional=a.decimal,
@@ -607,6 +580,17 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	test_cal(48, 856700, 2, 350800);
 	test_cal(45, 759722, 123, 100000);
 	*/
+	printk("===acos========\n");
+	//test_cal(0, 300000, 0, 0);
+	/*
+	test_cal(0, 900000, 0, 0);
+	test_cal(0, 950000, 0, 0);
+	printk("===near case\n");
+	test_cal(37, 448743, 126, 951502);
+	printk("==far case\n");
+	test_cal(37, 466380, 126, 948009);
+	printk(" busan station\n");
+	test_cal(35, 115225, 129, 40054);*/
 	return 0;
 }
 
@@ -663,13 +647,17 @@ struct gps_float gps_haversine_distance(struct gps_location file_loc)
 	tmp = mul_gps_float(&harv, &TWO);		// 2 * harv
 	if (comp_gps_float(&ONE, &tmp) >= 0) {
 		tmp = sub_gps_float(&ONE, &tmp);	// 1-2*harv is positive
+		printk("===before arccos: %lld.%lld\n", tmp.integer, tmp.decimal);
 		tmp = acos_gps_float(&tmp, ACOS_POS);		// acos(1-2*harv); use ACOS_POS as flag
 	} else {
 		tmp = sub_gps_float(&tmp, &ONE);	// 1-2*harv is negative. so we calculate 2*harv - 1
+		printk("===before arccos: %lld.%lld\n", tmp.integer, tmp.decimal);
+
 		tmp = acos_gps_float(&tmp, ACOS_NEG);		// since 1-2*harv is originally negative, use ACOS_NEG as flag
 
 	}
-	
+	printk("===after arccos: %lld.%lld\n", tmp.integer, tmp.decimal);
+
 	distance = mul_gps_float(&AVG_EARTH_RADIUS, &tmp);	// R * acos(1 - 2*harv)
 	distance = mul_gps_float(&distance, &KM2M);		// transform km to m
 	return distance;
@@ -687,6 +675,7 @@ int gps_distance_permission(struct inode *inode)
 	set_gps_float(&accuracy, curr_loc.accuracy + file_loc.accuracy, 0);
 
 	if (comp_gps_float(&accuracy, &distance) >= 0) {
+		printk("Too far distance between two points: %lld.%lld\n", distance.integer, distance.decimal);
 		return 0;
 	} else {
 		return -1;

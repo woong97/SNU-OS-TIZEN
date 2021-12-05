@@ -172,9 +172,12 @@ int gps_distance_permission(struct inode *inode)
 - add, sub, mult, div를 구현해준다. gps_location 구조체 방식의 문제점은 -1과 0 사이의 음수를 다를 수 없다는 점이다. -0 = 0 이기 때문에 -0.xxx를 표현할 방법이 없다. 따라서 이는 연산에 있어서 큰 문제가 된다. 처음에는 이 음수들을 다 고려해서 구현을 하였지만, 결국 이 함수들을 호출하는 곳에서 input이 -1에서 0 사이의 음수인지 확인을 해줘야 된다는 점 때문에, 오히려 복잡해진 다는 것을 꺠달았다. 따라서 이 기본 사칙 연산은 무조건 input 값들이 양수라고 가정하고 구현하였고, 이 함수를 호출하는 곳에서 input이 음수인지 양수인지를 handling 해주기로 하였다. 또한 sub를 호출할 때는 반드시 첫번째 paramenter가 두번째 parameter 보다 반드시 크다는 가정을 하였다.
 - factorial, power, degree2rad를 구현해준다.
 - cos, sin, arccos 삼각함수를 구현한다. 이 삼각함수를 쉽게 구현하기 위해, global variable로, gps_float type의 pi, pi/180, 1, 0, 1/2를 선언해주었다.
-- 삼각함수들은 talyor series를 통한 근사식을 구현해준다. arccos의 경우 x가 1에 가까우면 실제 값과 근사값의 오차가 여전히 크게 나타난다. 또 이 최종 arccos 값이 지구의 반지름과 곱해지는 결과값이 두 점사이의 거리이기 때문에, 오차가 굉장히 중요하다. 그래서 arccos의 경우 9개의 항까지 근사하였다
+- 삼각함수들은 talyor series를 통한 근사식을 구현해준다. arccos의 경우 x가 1에 가까우면 실제 값과 근사값의 오차가 여전히 크게 나타난다. 또 이 최종 arccos 값이 지구의 반지름과 곱해지는 결과값이 두 점사이의 거리이기 때문에, 오차가 굉장히 중요하다. 그래서 최대한 많은 항까지 고려해주려 하였다. 하지만 8번째 항부터는 계산에서 overflow가 나기 떄문에 8번째 항부터는 x^(2n+1) 에 곱해줘야 하는 계수들을 직접 계산해줘서 코드에 직접 집어 넣었다. 이를 통해 48개의 항까지 계산하였다. 하지만 그럼에도 x >= 0.995 이상인 숫자들에 대해선 너무 큰 오차가 나기 때문에 input x가 0.995보다 큰 경우에만 절반으로 나눠주었다.
  
-![image](https://user-images.githubusercontent.com/60849888/144718566-ccec63d2-046a-4b62-bf98-6d0dc923b4dc.png)
+
+![image](https://user-images.githubusercontent.com/60849888/144764184-6d21cda3-d074-48a4-9e84-9c229a784959.png)
+
+![image](https://user-images.githubusercontent.com/60849888/144764067-0f8f4e3a-a5bc-4804-913a-39b7fd4574e1.png)
 
 - 삼각함수 구현부를 보면 아래와 같은 모습들을 많이 찾을 수 있다. 삼각함수 연산에서는 -1과 0사이의 값이 계속 나타나고 위에서 설명하였듯이 이것을 handling 하는 것이 중요하다. 또한 sub 함수에서 반드시 lvalue가 rvalue보다 크다는 강제조항이 있기 때문에 아래와 같이 계속 handling 해줘야 한다. 
 ```C
@@ -216,7 +219,24 @@ return 2 * get_avg_earth_radius(unit) * asin(sqrt(harv_d))
 
 
 ## 3. Test
+- Test의 편의를 위해, 미리 서울대학교 공과대학 302동 위도 경도, 301동 위도 경도, 부산역의 위도 경도가 적힌 shell script 파일들을 준비하였다. 
+- 원래는 서울대학교 미술관의 위치를 받아, 302동과 미술관의 거리가 멀어서 permission denied를 기대했지만, 삼각함수를 거치면서 같은 값으로 이르게 되어 거리차이가 0으로 계산되었다. 근사식의 오차 때문이다. 그래서 부산역의 위치를 잡고 테스트 하였다.
+```C
+root:~> bash setgps_snu302.sh
+./gpsupdate 37 448743 126 951502 50
 
+root:~> touch proj4/myfile
+
+root:~> bash setgps_snu301.sh
+./gpsupdate 37 450049 126 951409 50
+root:~> ./file_loc proj4/myfile
+=> 결과
+
+root:~> bash setgps_busan.sh
+./gpsupdate 37 448743 126 951502 50
+root:~> ./file_loc proj4/myfile
+=> permission denied 결과
+```
 ## 4. Lessons learned
 - 파일이 어떻게 관리되는지는 늘 궁금해왔던 것인데, 이번 랩을 계기로 커널 파일시스템을 살펴보면서 어떻게 파일, Inode가 관리되는지 배울 수 있어서 뜻깊은 시간이었다.
 - abstraction의 핵심이 어떤 cpu 환경에서도 잘 돌아가게끔 만드는 것이라 생각하는데, endian에 상관없이 이런식으로 처리한다는 점이 매우 흥미로웠다, 

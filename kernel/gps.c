@@ -580,7 +580,6 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	test_cal(48, 856700, 2, 350800);
 	test_cal(45, 759722, 123, 100000);
 	*/
-	printk("===acos========\n");
 	//test_cal(0, 300000, 0, 0);
 	/*
 	test_cal(0, 900000, 0, 0);
@@ -647,16 +646,13 @@ struct gps_float gps_haversine_distance(struct gps_location file_loc)
 	tmp = mul_gps_float(&harv, &TWO);		// 2 * harv
 	if (comp_gps_float(&ONE, &tmp) >= 0) {
 		tmp = sub_gps_float(&ONE, &tmp);	// 1-2*harv is positive
-		printk("===before arccos: %lld.%lld\n", tmp.integer, tmp.decimal);
 		tmp = acos_gps_float(&tmp, ACOS_POS);		// acos(1-2*harv); use ACOS_POS as flag
 	} else {
 		tmp = sub_gps_float(&tmp, &ONE);	// 1-2*harv is negative. so we calculate 2*harv - 1
-		printk("===before arccos: %lld.%lld\n", tmp.integer, tmp.decimal);
 
 		tmp = acos_gps_float(&tmp, ACOS_NEG);		// since 1-2*harv is originally negative, use ACOS_NEG as flag
 
 	}
-	printk("===after arccos: %lld.%lld\n", tmp.integer, tmp.decimal);
 
 	distance = mul_gps_float(&AVG_EARTH_RADIUS, &tmp);	// R * acos(1 - 2*harv)
 	distance = mul_gps_float(&distance, &KM2M);		// transform km to m

@@ -460,10 +460,12 @@ struct gps_float acos_gps_float(struct gps_float *x, int acos_flag) {
 		}
 
 	}
+	/*
 	if (acos_flag == ACOS_POS) {
 		if (x->integer == 0 && x->decimal >= 995000)
 			ret = div_gps_float(&ret, &TWO);
 	}
+	*/
 	return ret;
 }
 
@@ -692,7 +694,7 @@ long sys_get_gps_location(const char __user *pathname, struct gps_location __use
 
 	inode = path.dentry->d_inode;
 	if (inode_permission(inode, MAY_READ)) {
-		printk("My Permission Denied\n");
+		printk("Permission Denied\n");
 		return -EACCES;
 	}
 

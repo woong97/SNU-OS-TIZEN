@@ -3,4 +3,5 @@ exec qemu-system-aarch64 -nographic -M virt -m 2048 -cpu cortex-a53 -smp cores=4
   -drive file=../tizen-image/rootfs.img,format=raw,if=sd,id=rootfs -device virtio-blk-device,drive=rootfs \
   -drive file=../tizen-image/boot.img,format=raw,if=sd,id=boot -device virtio-blk-device,drive=boot \
   -drive file=../tizen-image/modules.img,format=raw,if=sd,id=modules -device virtio-blk-device,drive=modules \
-  -drive file=../tizen-image/system-data.img,format=raw,if=sd,id=system-data -device virtio-blk-device,drive=system-data
+  -drive file=../tizen-image/system-data.img,format=raw,if=sd,id=system-data -device virtio-blk-device,drive=system-data \
+  -drive file=./proj4.fs,format=raw,if=sd,id=os.proj4 -device virtio-blk-device,drive=os.proj4

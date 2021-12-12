@@ -10,7 +10,6 @@ int main(int argc, char *argv[]) {
 	struct gps_location loc;
 	if (argc != 2) {
 		printf("Input shuld be ./file_loc <filepath>\n");
-	} else {
 		exit(EXIT_FAILURE);
 	}
 

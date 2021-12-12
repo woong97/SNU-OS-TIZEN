@@ -412,11 +412,7 @@ struct gps_float acos_gps_float(struct gps_float *x, int acos_flag) {
 	int acos_decimals[40] = {11552, 9761, 8390, 7313, 6447, 5740, 5153, 4660, 4241, 3881, 
 				  3569, 3297, 3058, 2846, 2658, 2489, 2338, 2201, 2078, 1965, 
 				  1862, 1768, 1682, 1602, 1528, 1460, 1397, 1338, 1284, 1233, 
-				  1185, 1140, 1098, 1058, 1021,  986,  953,  922,  892,  864}; //after 837
-	
-	//int acos_decimals[20] = {11552, 9761, 8390, 7313, 6447, 5740, 5153, 4660, 4241, 3881, 3569,
-	//				 3297, 3058, 2846, 2658, 2489, 2338, 2201, 2078, 1965};
-	
+				  1185, 1140, 1098, 1058, 1021,  986,  953,  922,  892,  864};
 	int i;
 
 	if (comp_gps_float(&ONE, x) == 0 && acos_flag == ACOS_POS)
@@ -570,7 +566,7 @@ long sys_set_gps_location(struct gps_location __user *loc)
 	curr_loc.lng_fractional = buf_loc.lng_fractional;
 	curr_loc.accuracy = buf_loc.accuracy;
 	mutex_unlock(&gps_lock);
-	// print_curr_loc();
+	print_curr_loc();
 	/*
 	test_cal(90, 0, 42, 0);
 	test_cal(-60, 0, 1, 1);
@@ -667,13 +663,13 @@ int gps_distance_permission(struct inode *inode)
 	if (inode->i_op->get_gps_location) {
 		inode->i_op->get_gps_location(inode, &file_loc);
 	}
+	// print_curr_loc();
 	distance = gps_haversine_distance(file_loc);
 	set_gps_float(&accuracy, curr_loc.accuracy + file_loc.accuracy, 0);
-
 	if (comp_gps_float(&accuracy, &distance) >= 0) {
-		printk("Too far distance between two points: %lld.%lld\n", distance.integer, distance.decimal);
 		return 0;
 	} else {
+		printk("Too far distance between two points: %lld.%lld\n", distance.integer, distance.decimal);
 		return -1;
 	}
 }
@@ -689,15 +685,17 @@ long sys_get_gps_location(const char __user *pathname, struct gps_location __use
 		return -EINVAL;
 	
 	error = user_path_at(AT_FDCWD, pathname, lookup_flags, &path);
-	if (error)
+	if (error) {
+		printk("user paht error\n");
 		return error;
-	inode = path.dentry->d_inode;
+	}
 
+	inode = path.dentry->d_inode;
 	if (inode_permission(inode, MAY_READ)) {
-		printk("Permission Denied\n");
+		printk("My Permission Denied\n");
 		return -EACCES;
 	}
-	
+
 	if (inode->i_op->get_gps_location) {
 		inode->i_op->get_gps_location(inode, &kernel_buf);
 	} else {

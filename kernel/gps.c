@@ -704,7 +704,7 @@ long sys_get_gps_location(const char __user *pathname, struct gps_location __use
 		return -EOPNOTSUPP;
 	}
 
-	if(copy_to_user(loc, &kernel_buf, sizeof(struct gps_location) != 0))
+	if(copy_to_user(loc, &kernel_buf, sizeof(struct gps_location)) != 0)
 		return -EFAULT;
 	return 0;
 }

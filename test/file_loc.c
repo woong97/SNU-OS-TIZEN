@@ -23,7 +23,7 @@ int main(int argc, char *argv[]) {
 	printf("=> longtitude : %d.%06d\n", loc.lng_integer, loc.lng_fractional);
 	printf("-> accuracy : %d\n\n", loc.accuracy);
 
-	printf("Google Map Link: https://www.google.co.kr/maps/search/%d.%06d+%d.%06d\n",
+	printf("Google Maps Link: https://www.google.co.kr/maps/search/%d.%06d+%d.%06d\n",
 			loc.lat_integer, loc.lat_fractional, loc.lng_integer, loc.lng_fractional);
 
 	return EXIT_SUCCESS;

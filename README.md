@@ -230,13 +230,23 @@ root:~> touch proj4/myfile
 root:~> bash setgps_snu301.sh
 ./gpsupdate 37 450049 126 951409 50
 root:~> ./file_loc proj4/myfile
-=> 결과
+File proj4/myfile location
+=> latitude: 37.448743
+=> longtitude: 126.951502
+=> accuracy : 50
+
+Google Maps Link: https://www.google.co.kr/maps/search/37.448743+126.951502
 
 root:~> bash setgps_busan.sh
 ./gpsupdate 37 448743 126 951502 50
 root:~> ./file_loc proj4/myfile
-=> permission denied 결과
+Too far distance between two points: 604951.934
+Permission Denied
+sys_get_gps_location failed
 ```
+- 위 결과를 보아 알 수 있듯이, 302동에서 만든 파일을 301동으로 위치를 바꿔서 파일에 접근할때는 파일의 gps location과 gps google man link가 잘 출력되는걸 확인 할 수 있다.
+- 부산으로 커널의 위치를 옮겼을 때 파일에 접근하게 되면, Permission Denied가 출력되는 것을 확인할 수 있다.
+
 ## 4. Lessons learned
 - 파일이 어떻게 관리되는지는 늘 궁금해왔던 것인데, 이번 랩을 계기로 커널 파일시스템을 살펴보면서 어떻게 파일, Inode가 관리되는지 배울 수 있어서 뜻깊은 시간이었다.
 - abstraction의 핵심이 어떤 cpu 환경에서도 잘 돌아가게끔 만드는 것이라 생각하는데, endian에 상관없이 이런식으로 처리한다는 점이 매우 흥미로웠다, 

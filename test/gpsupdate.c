@@ -11,12 +11,13 @@ void parse_input(struct gps_location *loc, char *argv[]) {
 	loc->lng_integer = atoi(argv[3]);
 	loc->lng_fractional = atoi(argv[4]);
 	loc->accuracy = atoi(argv[5]);
-
+/*
 	printf("Your input lat_integer: %d\n", loc->lat_integer);
 	printf("Your input lat_fractional: %d\n", loc->lat_fractional);
 	printf("Your input lng_integer: %d\n", loc->lng_integer);
 	printf("Your input lng_fractional: %d\n", loc->lng_fractional);
 	printf("Your input accuracy: %d\n", loc->accuracy);
+*/
 }
 
 

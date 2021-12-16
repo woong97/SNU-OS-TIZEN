@@ -77,8 +77,6 @@ int ext2_get_gps_location(struct inode *inode, struct gps_location *loc);
 ```
 - ext2_set_gps_location은 input inode에 current gps location 정보를 copy 해준다. 이때도 mutex를 사용해준다. 파일이 생성되고, 수정될 때마다 이 함수가 호출되어야 한다.
 - 파일이 생성될 때를 위해, fs/ext2/namei.c ext2_create 함수 안에서, 파일이 수정될 때를 위해 fs/attr.c notify_change 함수 안에서 호출해준다. 각각의 함수 내에서 아래와 같이 호출해주면 된다.
-- (확인!!!) fs/ext2/ialloc.c ext2_new_inode do we need?
-- (확인!!!) fs/ext2/inode.c setsize do we need?
 
 ```C
 if (inode->i_op->set_gps_location)
@@ -172,7 +170,7 @@ int gps_distance_permission(struct inode *inode)
 - add, sub, mult, div를 구현해준다. gps_float 구조체 방식의 문제점은 -1과 0 사이의 음수를 다를 수 없다는 점이다. -0 = 0 이기 때문에 -0.xxx를 표현할 방법이 없다. 따라서 이는 연산에 있어서 큰 문제가 된다. 처음에는 이 음수들을 다 고려해서 구현을 하였지만, 결국 이 함수들을 호출하는 곳에서 input이 -1에서 0 사이의 음수인지 확인을 해줘야 된다는 점 때문에, 오히려 복잡해진 다는 것을 꺠달았다. 따라서 이 기본 사칙 연산은 무조건 input 값들이 양수라고 가정하고 구현하였고, 이 함수를 호출하는 곳에서 input이 음수인지 양수인지를 handling 해주기로 하였다. 또한 sub를 호출할 때는 반드시 첫번째 paramenter가 두번째 parameter 보다 반드시 크다는 가정을 하였다.
 - factorial, power, degree2rad를 구현해준다.
 - cos, sin, arccos 삼각함수를 구현한다. 이 삼각함수를 쉽게 구현하기 위해, global variable로, gps_float type의 pi, pi/180, 1, 0, 1/2를 선언해주었다.
-- 삼각함수들은 talyor series를 통한 근사식을 구현해준다. arccos의 경우 x가 1에 가까우면 실제 값과 근사값의 오차가 여전히 크게 나타난다. 또 이 최종 arccos 값이 지구의 반지름과 곱해지는 결과값이 두 점사이의 거리이기 때문에, 오차가 굉장히 중요하다. 그래서 최대한 많은 항까지 고려해주려 하였다. 하지만 8번째 항부터는 계산에서 overflow가 나기 떄문에 8번째 항부터는 x^(2n+1) 에 곱해줘야 하는 계수들을 직접 계산해줘서 코드에 직접 집어 넣었다. 이를 통해 48개의 항까지 계산하였다. 하지만 그럼에도 x >= 0.995 이상인 숫자들에 대해선 너무 큰 오차가 나기 때문에 input x가 0.995보다 큰 경우에만 절반으로 나눠주었다.
+- 삼각함수들은 talyor series를 통한 근사식을 구현해준다. arccos의 경우 x가 1에 가까우면 실제 값과 근사값의 오차가 여전히 크게 나타난다. 또 이 최종 arccos 값이 지구의 반지름과 곱해지는 결과값이 두 점사이의 거리이기 때문에, 오차가 굉장히 중요하다. 그래서 최대한 많은 항까지 고려해주려 하였다. 하지만 8번째 항부터는 계산에서 overflow가 나기 떄문에 8번째 항부터는 x^(2n+1) 에 곱해줘야 하는 계수들을 직접 계산해줘서 코드에 직접 집어 넣었다. 이를 통해 48개의 항까지 계산하였다. 하지만 그럼에도 x >= 0.995 이상인 숫자들에 대해선 너무 큰 오차가 났다
  
 
 ![image](https://user-images.githubusercontent.com/60849888/144764184-6d21cda3-d074-48a4-9e84-9c229a784959.png)

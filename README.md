@@ -222,7 +222,3 @@ pkill -f "selector"
 pkill -f "trial"
 pkill -f "rotd"
 ```
-
-## 4. Lessons learned
-- 실제 개발할 때 read lock, write lock을 많이 사용하는데, 이를 직접 구현해보고 원리를 확실히 알 수 있어서 뜻 깊은 시간이었다.
-- write lock의 starvation을 어떻게 막을 수 있을지 고민하는 과정이 매우 즐거웠고, 내가 한 방법 말고도 더 다양하게 시도해볼 수 있을 것 같다.  

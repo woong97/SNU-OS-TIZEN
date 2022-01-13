@@ -1,0 +1,4 @@
+# <file system> <mount point>   <type>  <options>           <dump> <pass>
+/dev/root       /               ext4    defaults,noatime,rw 0      1
+LABEL=system-data /opt          ext4    defaults,noatime    0      2
+LABEL=os.proj4	/root/proj4	ext2    defaults,noatime,rw 0      3

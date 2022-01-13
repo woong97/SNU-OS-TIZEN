@@ -236,7 +236,7 @@ void trigger_load_balance_wrr()
 - kernel/sched/core.c "__sched_setscheduler" 함수가 호출 될 떄, sched_class가 wrr이고, rq의 cpu가 우리가 선정한 0번 cpu일 경우에는 다른 cpu로 연결된 wrr runqueue에 task가 들어갈 수 있게 migrate 해준다 
 - migrate_task_to_wrr_existed_cpu라는 함수를 만들고, cpu를 순회하면서 0번 cpu가 아닌경우에는 cpumask_set_cpu를 해준다
 - 그리고 아래 함수는 __sched_setscheduler 시작 부분에서 policy가 wrr인 경우에 호출해준다
-- 또한 wrr.c 에서 cpu를 순회하면서 원하는 cpu를 찾아야 되는 부분에서 역시, cpu 0인 경우에는 continue를 하여 skip 해줐다.
+- 또한 wrr.c 에서 cpu를 순회하면서 원하는 cpu를 찾아야 되는 부분에서 역시, cpu 0인 경우에는 continue를 하여 skip 해줬다.
 
 ``` C
 static struct rq *migrate_task_to_wrr_existed_cpu(struct rq *rq, struct task_struct *p)
@@ -322,12 +322,7 @@ if (syscall(SCHED_SETWEIGHT_SYS_NUM, getpid(), weight) < 0) {
 ``` 
 - 첨부한 plot.pdf는, test_weight 프로그램을 돌린 것으로, weight를 변경함에 따라서 소요시간에 유의미한 차이가 있어보이지 않는다. input number로는 아주 큰 소수인 100000049를 집어넣었다.
 - test_fork로 random한 weight으로 실험해보았을 때도, weight의 크기에 따른 소요시간에 차이가 보이지 않았다.
-- 아마 코드에 문제가 있어서 소요시간에 차이가 없는 것으로 생각하는데, 어떤 문제가 있는지 파악하지 못해서 너무 아쉽다. 정답을 알려주신다면 무엇이 문제인지 꼭 다시 공부하고 싶다.
+- 아마 코드에 문제가 있어서 소요시간에 차이가 없는 것으로 생각하는데, 어떤 문제가 있는지 파악하지 못했다.
 
 ## 4. Improvement of WRR Scheduler
 - EXTRA.md에 아이디어들을 적어놓았습니다
-
-## 5. Lessons learned
-- 문제가 발생해도 뭐가 문제인지 파악하기가 너무 어려웠다. 끝까지 파악하지 못한 문제들도 있어서 너무 아쉽다. 리눅스 개발자, 운영체제를 연구하는 사람들에 대한 존경심이 생겼다.
-- 단 하나의 스케줄러만 관리 되는 것으로 알고 있었는데 여러개의 스케줄러가 이런식으로 관리 된다는 것이 매우 흥미롭고 유익했다. 이번 프로젝트는 운영체제에 대한 이해를 높이는데 큰 도움이 됐다.
-- 이번 프로젝트에 다양한 Lock을 사용했다. lock을 다루는 부분이 너무 어려웠고, 상황에 따라 어느 lock을 사용해야 할지 판단하기 어려웠다. 그래도 이번 프로젝트를 통해 다양한 lock을 접해보면서 공부가 많이 됐다.

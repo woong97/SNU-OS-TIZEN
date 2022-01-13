@@ -215,6 +215,11 @@ return 2 * get_avg_earth_radius(unit) * asin(sqrt(harv_d))
 - 기본 logic은 위 python code를 따르지만 arccos을 사용하기 위해 아래와 같은 식을 kernel/gps.c gps_haversine_distance 메소드로 그대로 구현했다. 
 ![image](https://user-images.githubusercontent.com/60849888/144707258-2aab5d37-07ef-418e-8325-22c91e2e9846.png)
 
+### 2.6 Mount our customized file system
+- proj4.fs를 tizen kernel 안에서 mount해줘야 하는데, loop 문제로 잘 안되는 경우들이 있다. 이 문제를 해결하기 위해, qemu.sh command를 수정해주고. fstab 파일을 작성해줘서 이 파일로 원래 tizen image 의 fstab 파일을 교체해준다.
+```C
+% sudo cp ./my_fstab ${MNT_DIR}/etc/fstab
+```
 
 ## 3. Test
 - Test의 편의를 위해, 미리 서울대학교 공과대학 302동 위도 경도, 301동 위도 경도, 부산역의 위도 경도가 적힌 shell script 파일들을 준비하였다. 
